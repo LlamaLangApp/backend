@@ -22,6 +22,8 @@ from api import views
 
 router = routers.DefaultRouter()
 router.register('user', views.UserViewSet, basename='user')
+router.register('translation', views.TranslationReadOnlySet, basename='translation')
+router.register('wordset', views.WordSetReadOnlySet, basename='wordset')
 
 
 urlpatterns = [

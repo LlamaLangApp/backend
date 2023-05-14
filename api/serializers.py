@@ -3,6 +3,8 @@
 from django.contrib.auth.models import User
 from rest_framework import serializers
 
+from api.models import Translation, WordSet
+
 
 class UserSerializer(serializers.ModelSerializer):
     password = serializers.CharField(
@@ -32,3 +34,13 @@ class UserSerializer(serializers.ModelSerializer):
             user.set_password(password)
             user.save()
         return user
+
+class TranslationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Translation
+        fields = '__all__'
+
+class WordSetSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = WordSet
+        fields = '__all__'
