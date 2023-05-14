@@ -86,7 +86,8 @@ class UserSerializerTest(APITestCase):
         user_id = serializer.data['id']
         response = self.client.delete(f'/user/{user_id}/')
         self.assertEqual(response.status_code, 204)
-        self.assertFalse(User.objects.filter(id=user_id).exists())
+        user.refresh_from_db()
+        self.assertFalse(user.is_active)
 
     def test_create_user(self):
         data = {
