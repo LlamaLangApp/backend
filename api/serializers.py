@@ -5,14 +5,20 @@ from rest_framework import serializers
 
 
 class UserSerializer(serializers.ModelSerializer):
+    password = serializers.CharField(
+        style={'input_type': 'password'},
+        min_length=6,
+        max_length=68,
+        write_only=True)
+
     class Meta:
         model = User
         fields = ['id', 'username', 'email', 'first_name', 'last_name', 'password']
         extra_kwargs = {
             'password': {'write_only': True},
-            'email': {'required': True},
-            'first_name': {'required': True},
-            'last_name': {'required': False},
+            'email': {'required': True, 'allow_blank': False},
+            'first_name': {'required': True, 'allow_blank': False},
+            'last_name': {'required': True, 'allow_blank': False},
         }
 
     def create(self, validated_data):
@@ -26,7 +32,3 @@ class UserSerializer(serializers.ModelSerializer):
             user.set_password(password)
             user.save()
         return user
-
-    def delete(self, instance):
-        instance.delete()
-        return instance

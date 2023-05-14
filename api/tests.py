@@ -96,7 +96,7 @@ class UserSerializerTest(APITestCase):
             'first_name': 'John',
             'last_name': 'Doe',
         }
-        response = self.client.post('/api/users/', data)
+        response = self.client.post('/user/', data)
         self.assertEqual(response.status_code, 201)
         self.assertEqual(User.objects.count(), 1)
         user = User.objects.first()
@@ -106,3 +106,14 @@ class UserSerializerTest(APITestCase):
         self.assertEqual(user.last_name, 'Doe')
         self.assertTrue(user.check_password('password'))
 
+    def test_user_required_fields(self):
+        data = {
+            'username': 'johndoe',
+            'email ': '',
+            'password': '123asd123',
+            'first_name': '',
+            'last_name': '',
+        }
+        response = self.client.post('/user/', data)
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(User.objects.count(), 0)
