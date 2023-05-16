@@ -14,3 +14,9 @@ pip install -r requirements.txt
 ```commandline
 python manage.py runserver
 ```
+
+### Regenerate open-api schema
+Run
+```commandline
+python .\manage.py generateschema --format=openapi-json --file openapi.json
+```
