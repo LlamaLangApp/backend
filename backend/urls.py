@@ -21,7 +21,6 @@ from api import views
 
 
 router = routers.DefaultRouter()
-router.register('user', views.UserViewSet, basename='user')
 router.register('translation', views.TranslationReadOnlySet, basename='translation')
 router.register('wordset', views.WordSetReadOnlySet, basename='wordset')
 
@@ -29,5 +28,6 @@ router.register('wordset', views.WordSetReadOnlySet, basename='wordset')
 urlpatterns = [
     path('', include(router.urls)),
     path('admin/', admin.site.urls),
-    path('auth/', include('rest_framework.urls', namespace='rest_framework'))
+    path('auth/', include('djoser.urls')),
+    path('auth/', include('djoser.urls.authtoken')),
 ]
