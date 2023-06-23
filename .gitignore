@@ -128,3 +128,6 @@ dmypy.json
 cython_debug/
 
 .idea/
+
+# Ignore openapi file while API not finished
+openapi.json
