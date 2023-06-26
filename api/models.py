@@ -1,11 +1,14 @@
 from django.db import models
 from django.core.validators import MaxValueValidator, MinValueValidator
+
+
 class Translation(models.Model):
     english = models.CharField(max_length=64)
     polish = models.CharField(max_length=64)
 
     def __str__(self) -> str:
         return self.english
+
 
 class WordSet(models.Model):
     english = models.TextField()
@@ -15,6 +18,7 @@ class WordSet(models.Model):
 
     def __str__(self) -> str:
         return self.english
+
 
 class MemoryGameSession(models.Model):
     user = models.ForeignKey('auth.User', on_delete=models.CASCADE, null=False)

@@ -9,10 +9,12 @@ class TranslationSerializer(serializers.ModelSerializer):
         model = Translation
         fields = '__all__'
 
+
 class WordSetSerializer(serializers.ModelSerializer):
     class Meta:
         model = WordSet
         fields = '__all__'
+
 
 class MemoryGameSessionSerializer(serializers.ModelSerializer):
     class Meta:
