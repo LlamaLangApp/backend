@@ -119,6 +119,134 @@
         ]
       }
     },
+    "/wordset/{id}/translations/": {
+      "get": {
+        "operationId": "translationsWordSet",
+        "description": "",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "A unique integer value identifying this word set.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WordSet"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "tags": [
+          "wordset"
+        ]
+      }
+    },
+    "/memory-game/": {
+      "get": {
+        "operationId": "listMemoryGameSessions",
+        "description": "",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/MemoryGameSession"
+                  }
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "tags": [
+          "memory-game"
+        ]
+      },
+      "post": {
+        "operationId": "createMemoryGameSession",
+        "description": "",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MemoryGameSession"
+              }
+            },
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "$ref": "#/components/schemas/MemoryGameSession"
+              }
+            },
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/MemoryGameSession"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MemoryGameSession"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "tags": [
+          "memory-game"
+        ]
+      }
+    },
+    "/memory-game/{id}/": {
+      "get": {
+        "operationId": "retrieveMemoryGameSession",
+        "description": "",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "A unique integer value identifying this memory game session.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MemoryGameSession"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "tags": [
+          "memory-game"
+        ]
+      }
+    },
     "/auth/users/": {
       "get": {
         "operationId": "listUsers",
@@ -899,6 +1027,46 @@
           "english",
           "polish",
           "words"
+        ]
+      },
+      "MemoryGameSession": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "readOnly": true
+          },
+          "score": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "accuracy": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0
+          },
+          "duration": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "user": {
+            "type": "integer"
+          },
+          "wordset": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "score",
+          "accuracy",
+          "duration",
+          "timestamp",
+          "user",
+          "wordset"
         ]
       },
       "User": {
