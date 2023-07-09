@@ -46,7 +46,7 @@ class TokenAuthMiddleWare(BaseMiddleware):
 
 
 urlpatterns = [
-    path("waitlist/", consumers.WaitListConsumer.as_asgi()),
+    path("race/", consumers.RaceConsumer.as_asgi()),
 ]
 
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "backend.settings")

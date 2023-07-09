@@ -37,5 +37,5 @@ class MultiplayerGames(models.TextChoices):
 
 class WaitingRoom(models.Model):
     game = models.TextField(choices=MultiplayerGames.choices)
-    user = models.ManyToManyField("auth.User")
+    users = models.ManyToManyField("auth.User", blank=True)
     timestamp = models.DateTimeField(auto_now_add=True)
