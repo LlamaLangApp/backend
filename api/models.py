@@ -1,3 +1,6 @@
+from dataclasses import dataclass
+from typing import List
+
 from django.db import models
 from django.core.validators import MaxValueValidator, MinValueValidator
 
@@ -39,3 +42,18 @@ class WaitingRoom(models.Model):
     game = models.TextField(choices=MultiplayerGames.choices)
     users = models.ManyToManyField("auth.User", blank=True)
     timestamp = models.DateTimeField(auto_now_add=True)
+
+
+@dataclass
+class RaceRound:
+    options: List[str]
+    answer: str
+    question: str
+
+
+class RaceActiveGame(models.Model):
+    users = models.ManyToManyField("auth.User")
+    answers_count = models.IntegerField(default=0)
+    round_count = models.IntegerField(default=0)
+    # Contains an array of `RaceRound``
+    rounds = models.JSONField()

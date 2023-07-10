@@ -2,13 +2,14 @@ import asyncio
 from dataclasses import dataclass, asdict
 from enum import Enum, auto
 import json
+from random import shuffle, sample
 from typing import List
 
 from channels.db import database_sync_to_async
 from channels.generic.websocket import AsyncWebsocketConsumer
 from asgiref.sync import async_to_sync
 
-from api.models import WaitingRoom
+from api.models import WaitingRoom, WordSet, RaceRound, RaceActiveGame
 from django.contrib.auth import get_user_model
 
 User = get_user_model()
@@ -85,10 +86,13 @@ class WaitListConsumer(AsyncWebsocketConsumer):
             await self.channel_layer.group_add(group_name, self.channel_name)
 
             await self.send(JoinedWaitroomMessage().to_json())
-            self.state == SocketGameState.IN_WAITROOM
+            self.state = SocketGameState.IN_WAITROOM
 
-            if await self.is_waitroom_full(message.game):
-                await self.channel_layer.group_send(group_name, {"type": "start.game"})
+            players = await self.is_waitroom_full(message.game)
+
+            if players:
+                session_id = await self.on_game_init(players)
+                await self.channel_layer.group_send(group_name, {"type": "start.game", "session_id": session_id})
         elif self.state == SocketGameState.IN_WAITROOM:
             pass
         elif self.state == SocketGameState.IN_GAME:
@@ -107,22 +111,21 @@ class WaitListConsumer(AsyncWebsocketConsumer):
     def is_waitroom_full(self, game) -> bool:
         room = WaitingRoom.objects.filter(game=game).get()
         if len(room.users.all()) == 2:
+            players = room.users.all()
             room.delete()
-            return True
+            return players
         return False
 
     async def start_game(self, event):
-        self.state = SocketGameState.BEFORE_GAME
-        # TODO: fetch from db
-        await self.send(GameStartingMessage(players=["alice", "bob"]).to_json())
-        await asyncio.sleep(5)
-        self.state = SocketGameState.IN_GAME
-        await self.on_start()
+        await self.on_start(event["session_id"])
 
-    async def on_start(self):
+    async def on_game_init(self, players):
         raise NotImplementedError()
 
-    async def on_message(self):
+    async def on_start(self, session_id):
+        raise NotImplementedError()
+
+    async def on_message(self, message):
         raise NotImplementedError()
 
     async def on_disconnected(self):
@@ -148,14 +151,66 @@ class AnswerMessage(WebSocketMessage):
 
 
 class RaceConsumer(WaitListConsumer):
-    async def on_start(self):
+    def __init__(self, *args, **kwargs):
+        super().__init__(args, kwargs)
+        self.race_session = None
+
+    async def on_game_init(self, players):
+        race_rounds = get_race_rounds(await database_sync_to_async(get_words_for_play)())
+        game_session = RaceActiveGame.objects.create(users=players, rounds=race_rounds)
+        return game_session.pk
+
+    async def on_start(self, session_id):
+        self.state = SocketGameState.BEFORE_GAME
+        await self.get_race_session(session_id)
+        message = await self.create_starting_message()
+        await self.send(message)
+
+        await asyncio.sleep(5)
+
+        self.state = SocketGameState.IN_GAME
         await self.send(self.get_new_question_message().to_json())
 
-    async def on_message(self):
-        pass
+    async def on_message(self, message):
+        if message.type == RaceMessageType.RESPONSE:
+            self.handle_answer(message)
 
     async def on_disconnected(self):
         pass
 
     def get_new_question_message(self):
         return NewQuestionMessage(question="B", answers=["a", "b", "c", "d"])
+
+    @database_sync_to_async
+    def create_starting_message(self):
+        players = self.race_session.users.all().values_list("username", flat=True)
+        GameStartingMessage(players=players).to_json()
+
+    @database_sync_to_async
+    def get_race_session(self, session_id):
+        self.race_session = RaceActiveGame.objects.get(pk=session_id)
+
+    def handle_answer(self, message):
+        user_id, answer = message["user_id"], message["answer"]
+        self.race_session.answers_count += 1
+
+
+
+def get_race_rounds(words):
+    rounds = []
+    for _ in range(10):
+        shuffle(words)
+        word = words.pop(0)
+        correct_translation = word["polish"]
+
+        incorrect_translations = sample([w["polish"] for w in words], 3)
+
+        rounds.append(RaceRound(answer=correct_translation,
+                                question=word["english"],
+                                options=incorrect_translations + [correct_translation]))
+    return rounds
+
+
+def get_words_for_play():
+    word_set = WordSet.objects.order_by("?")[0]
+    return list(word_set.words.all().values("polish", "english"))
