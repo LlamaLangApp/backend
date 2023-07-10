@@ -47,74 +47,89 @@ class GameStartingMessage(WebSocketMessage):
 class SocketGameState(Enum):
     JUST_CONNECTED: int = auto()
     IN_WAITROOM: int = auto()
-    BEFORE_GAME: int = auto()
     IN_GAME: int = auto()
 
 
 class WaitListConsumer(AsyncWebsocketConsumer):
+    # Utils
+    async def group_send(self, function_name: str, args):
+        await self.channel_layer.group_send(
+            self.__group_name,
+            {"type": function_name.replace("_", "."), **args},
+        )
+
+    # Websocket functions
+
     async def connect(self):
         if self.scope["user"].is_authenticated:
             self.user: User = self.scope["user"]
-            self.state = SocketGameState.JUST_CONNECTED
+            self.__state = SocketGameState.JUST_CONNECTED
             await self.accept()
         else:
             self.user = None
-            self.state = None
+            self.__state = None
             await self.close()
 
     async def disconnect(self, close_code):
-        if not self.state:
+        if not self.__state:
             return
 
-        if self.state == SocketGameState.IN_WAITROOM:
+        await self.channel_layer.group_discard(self.__group_name, self.channel_name)
+        if self.__state == SocketGameState.IN_WAITROOM:
             await self.remove_user_from_waitroom()
-        elif self.state == SocketGameState.IN_GAME:
+        elif self.__state == SocketGameState.IN_GAME:
             await self.on_disconnected()
 
-    @database_sync_to_async
-    def remove_user_from_waitroom(self):
-        room = WaitingRoom.objects.filter(users__pk__contains=self.user.pk).get()
-        async_to_sync(self.channel_layer.group_discard)(str(room.pk), self.channel_name)
-        room.users.remove(self.user)
-        room.save()
+        self.__state = None
+        self.__group_name = None
+        self.user = None
 
     async def receive(self, text_data):
         message = json.loads(text_data)
 
         # TODO: security
-        if self.state == SocketGameState.JUST_CONNECTED:
+        if self.__state == SocketGameState.JUST_CONNECTED:
             message = WaitroomRequestMessage(game=message["game"])
 
             room_pk = await self.add_user_to_waitroom(message.game)
-            self.group_name = str(room_pk)
-            await self.channel_layer.group_add(self.group_name, self.channel_name)
+            self.__group_name = str(room_pk)
+            await self.channel_layer.group_add(self.__group_name, self.channel_name)
 
             await self.send(JoinedWaitroomMessage().to_json())
-            self.state = SocketGameState.IN_WAITROOM
+            self.__state = SocketGameState.IN_WAITROOM
 
             is_full, players = await self.is_waitroom_full(message.game)
-
             if is_full:
                 session_id = await self.on_game_init(players)
-                await self.channel_layer.group_send(
-                    self.group_name, {"type": "start.game", "session_id": session_id}
-                )
-        elif self.state == SocketGameState.IN_WAITROOM:
+                await self.group_send("event_start_game", {"session_id": session_id})
+        elif self.__state == SocketGameState.IN_WAITROOM:
             pass
-        elif self.state == SocketGameState.IN_GAME:
+        elif self.__state == SocketGameState.IN_GAME:
             await self.on_message(message)
+
+    # Database functions
+
+    @database_sync_to_async
+    def remove_user_from_waitroom(self):
+        room = WaitingRoom.objects.filter(users__pk__contains=self.user.pk).get()
+        room.users.remove(self.user)
+        room.save()
 
     @database_sync_to_async
     def add_user_to_waitroom(self, game) -> str:
         room, _ = WaitingRoom.objects.filter(game=game).get_or_create(game=game)
-
         room.users.add(self.user)
         room.save()
 
         return room.pk
 
     @database_sync_to_async
-    def is_waitroom_full(self, game) -> Tuple[bool, Any]:
+    def is_waitroom_full(self, game) -> Tuple[bool, List[int]]:
+        """
+        First result is boolean that means if the waitroom is full
+        If the waitroom is full it's deleted and the second result is
+        a list of the player ids, otherwise it's None
+        """
         room = WaitingRoom.objects.filter(game=game).get()
         if len(room.users.all()) == 2:
             players = list(room.users.all().values_list("pk", flat=True))
@@ -122,10 +137,17 @@ class WaitListConsumer(AsyncWebsocketConsumer):
             return True, players
         return False, None
 
-    async def start_game(self, event):
+    # Group events
+
+    async def event_start_game(self, event):
+        self.__state = SocketGameState.IN_GAME
         await self.on_start(event["session_id"])
 
-    async def on_game_init(self, players):
+    # Virtual functions
+
+    @staticmethod
+    async def on_game_init(players: List[int]) -> int:
+        """Should return the pk of the game session"""
         raise NotImplementedError()
 
     async def on_start(self, session_id):
@@ -169,11 +191,31 @@ class RaceConsumer(WaitListConsumer):
         super().__init__(args, kwargs)
         self.race_session = None
 
-    async def on_game_init(self, players):
-        return (await self.create_race_active_game(players)).pk
+    # Virtual functions implementations
+    @staticmethod
+    async def on_game_init(players):
+        return (await RaceConsumer.create_race_active_game(players)).pk
 
+    async def on_start(self, session_id):
+        await self.init_race_session(session_id)
+        await self.send(await self.create_starting_message())
+        await asyncio.sleep(1)
+        await self.send(await self.create_question_message())
+
+    async def on_message(self, message):
+        message = AnswerMessage(answer=message["answer"])
+
+        if await self.handle_answer(message):
+            await self.group_send("event_send_results", {})
+
+    async def on_disconnected(self):
+        pass
+
+    # Database functions
+
+    @staticmethod
     @database_sync_to_async
-    def create_race_active_game(self, players):
+    def create_race_active_game(players):
         race_rounds = get_race_rounds(get_words_for_play())
         game_session = RaceActiveGame.objects.create(
             rounds=json.dumps([asdict(r) for r in race_rounds])
@@ -182,32 +224,9 @@ class RaceConsumer(WaitListConsumer):
         game_session.save()
         return game_session
 
-    async def on_start(self, session_id):
-        self.state = SocketGameState.BEFORE_GAME
-        await self.get_race_session(session_id)
-        message = await self.create_starting_message()
-        await self.send(message)
-
-        await asyncio.sleep(1)
-
-        self.state = SocketGameState.IN_GAME
-        await self.send(await self.create_question_message())
-
-    async def on_message(self, message):
-        message = AnswerMessage(answer=message["answer"])
-
-        if await self.handle_answer(message):
-            await self.channel_layer.group_send(
-                self.group_name, {"type": "send.results"}
-            )
-
-    async def on_disconnected(self):
-        pass
-
-    async def send_results(self, event):
-        await self.send(await self.create_result_message())
-        await asyncio.sleep(1)
-        await self.send(await self.create_question_message())
+    @database_sync_to_async
+    def init_race_session(self, session_id):
+        self.race_session = RaceActiveGame.objects.get(pk=session_id)
 
     @database_sync_to_async
     def create_question_message(self):
@@ -218,7 +237,7 @@ class RaceConsumer(WaitListConsumer):
                 question=round["question"], answers=round["options"]
             ).to_json()
         else:
-            print("end")
+            return None
 
     @database_sync_to_async
     def create_starting_message(self):
@@ -235,11 +254,8 @@ class RaceConsumer(WaitListConsumer):
         return ResultMessage(correct=round["answer"], points=points).to_json()
 
     @database_sync_to_async
-    def get_race_session(self, session_id):
-        self.race_session = RaceActiveGame.objects.get(pk=session_id)
-
-    @database_sync_to_async
     def handle_answer(self, message: AnswerMessage):
+        """Returns True if all players had answered already"""
         self.last_answer = message.answer
         self.race_session.refresh_from_db()
         self.race_session.answers_count += 1
@@ -252,6 +268,17 @@ class RaceConsumer(WaitListConsumer):
             return True
 
         return False
+
+    # Group events
+    async def event_send_results(self, event):
+        await self.send(await self.create_result_message())
+        await asyncio.sleep(1)
+
+        message = await self.create_question_message()
+        if message:
+            await self.send(message)
+        else:
+            print("end")
 
 
 def get_race_rounds(words) -> List[RaceRound]:
