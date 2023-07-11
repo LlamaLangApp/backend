@@ -5,8 +5,13 @@ from dataclasses import asdict
 from channels.db import database_sync_to_async
 
 from api.consumers.helpers import get_race_rounds, get_words_for_play
-from api.consumers.messages import ResultMessage, AnswerMessage, NewQuestionMessage, GameStartingMessage, \
-    GameResultMessage
+from api.consumers.messages import (
+    ResultMessage,
+    AnswerMessage,
+    NewQuestionMessage,
+    GameStartingMessage,
+    GameResultMessage,
+)
 from api.consumers.waitlist_consumer import WaitListConsumer
 from api.models import RaceActiveGame
 
@@ -36,9 +41,7 @@ class RaceConsumer(WaitListConsumer):
             await self.group_send("event_send_results", {})
 
     async def on_disconnected(self):
-        self.race_session.answers_count += 1
-        if self.race_session.answers_count == len(self.race_session.users.all()):
-            self.race_session.delete()
+       await self.clear_race_session()
 
     # Database functions
 
@@ -102,16 +105,23 @@ class RaceConsumer(WaitListConsumer):
             return True
 
         return False
+    
+    @database_sync_to_async
+    def clear_race_session(self):
+        self.race_session.refresh_from_db()
+        self.race_session.answers_count += 1
+        self.race_session.save()
+        if self.race_session.answers_count == len(self.race_session.users.all()):
+            self.race_session.delete()
+        self.race_session = None
 
     # Group events
     async def event_send_results(self, event):
         await self.send(await self.create_result_message())
         await asyncio.sleep(1)
 
-        if self.race_session.round_count < 10:
+        if self.race_session.round_count < 4:
             message = await self.create_question_message()
             await self.send(message)
         else:
             await self.send(await self.create_game_results_message())
-            print("end")
-
