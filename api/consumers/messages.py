@@ -1,13 +1,20 @@
 import json
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass
 from enum import Enum
 from typing import List
+
+
+class CustomJSONEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, Enum):
+            return obj.value
+        return super().default(obj)
 
 
 @dataclass
 class WebSocketMessage:
     def to_json(self):
-        return json.dumps(asdict(self))
+        return json.dumps(self, cls=CustomJSONEncoder)
 
 
 class WaitroomMessageType(str, Enum):

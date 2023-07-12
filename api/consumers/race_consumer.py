@@ -31,7 +31,9 @@ class RaceConsumer(WaitListConsumer):
     async def on_start(self, session_id):
         await self.init_race_session(session_id)
         await self.send(await self.create_starting_message())
+
         await asyncio.sleep(1)
+
         await self.send(await self.create_question_message())
 
     async def on_message(self, message):

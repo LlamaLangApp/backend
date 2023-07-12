@@ -13,12 +13,12 @@ User = get_user_model()
 
 
 class WaitListConsumer(AsyncWebsocketConsumer):
-    # Utils
-    async def group_send(self, function_name: str, args):
-        await self.channel_layer.group_send(
-            self.__group_name,
-            {"type": function_name.replace("_", "."), **args},
-        )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(args, kwargs)
+        self.user = None
+        self.__group_name = None
+        self.__state = None
 
     # Websocket functions
 
@@ -51,23 +51,32 @@ class WaitListConsumer(AsyncWebsocketConsumer):
 
         # TODO: security
         if self.__state == SocketGameState.JUST_CONNECTED:
-            message = WaitroomRequestMessage(game=message["game"])
-
-            room_pk = await self.add_user_to_waitroom(message.game)
-            self.__group_name = str(room_pk)
-            await self.channel_layer.group_add(self.__group_name, self.channel_name)
-
-            await self.send(JoinedWaitroomMessage().to_json())
-            self.__state = SocketGameState.IN_WAITROOM
-
-            is_full, players = await self.is_waitroom_full(message.game)
-            if is_full:
-                session_id = await self.on_game_init(players)
-                await self.group_send("event_start_game", {"session_id": session_id})
+            await self.handle_just_connected_state(message)
         elif self.__state == SocketGameState.IN_WAITROOM:
             pass
         elif self.__state == SocketGameState.IN_GAME:
             await self.on_message(message)
+
+    # Utils
+    async def group_send(self, function_name: str, args):
+        await self.channel_layer.group_send(
+            self.__group_name,
+            {"type": function_name.replace("_", "."), **args},
+        )
+
+    async def handle_just_connected_state(self, message):
+        message = WaitroomRequestMessage(game=message["game"])
+        room_pk = await self.add_user_to_waitroom(message.game)
+        self.__group_name = str(room_pk)
+        await self.channel_layer.group_add(self.__group_name, self.channel_name)
+
+        await self.send(JoinedWaitroomMessage().to_json())
+        self.__state = SocketGameState.IN_WAITROOM
+
+        is_full, players = await self.is_waitroom_full(message.game)
+        if is_full:
+            session_id = await self.on_game_init(players)
+            await self.group_send("event_start_game", {"session_id": session_id})
 
     # Group events
 
@@ -90,7 +99,6 @@ class WaitListConsumer(AsyncWebsocketConsumer):
 
     async def on_disconnected(self):
         raise NotImplementedError()
-
 
     # Database functions
 
@@ -121,3 +129,5 @@ class WaitListConsumer(AsyncWebsocketConsumer):
             room.delete()
             return True, players
         return False, None
+
+    # Helpers
