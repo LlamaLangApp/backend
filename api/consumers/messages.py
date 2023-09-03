@@ -1,7 +1,7 @@
 import json
 from dataclasses import dataclass, asdict
 from enum import Enum
-from typing import List
+from typing import List, Dict
 
 
 @dataclass
@@ -37,6 +37,7 @@ class RaceMessageType(str, Enum):
     NEW_QUESTION = "new_question"
     RESPONSE = "response"
     RESULT = "result"
+    FINAL_RESULT = "final_result"
 
 
 @dataclass
@@ -64,4 +65,33 @@ class GameResultMessage(WebSocketMessage):
     winner: str
     points: int
     type: str = RaceMessageType.RESULT
+
+
+@dataclass
+class GameFinalResultMessage(WebSocketMessage):
+    winner: str
+    winner_points: int
+    scoreboard: List[Dict[str, str]]
+    type: str = RaceMessageType.FINAL_RESULT
+
+    @classmethod
+    def create_from_players(cls, players_with_scores):
+        if players_with_scores:
+            highest_score_player = players_with_scores[0]
+            winner_username = highest_score_player['user__username']
+            winner_points = highest_score_player['score']
+
+            tie = winner_points == players_with_scores[1]['score']
+
+        if tie:
+            winner_username = None
+            winner_points = None
+
+        scoreboard = [{'username': player['user__username'], 'points': player['score']} for player in
+                      players_with_scores]
+
+        return cls(winner=winner_username, winner_points=winner_points, scoreboard=scoreboard)
+
+
+
 
