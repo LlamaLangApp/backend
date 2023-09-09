@@ -9,6 +9,7 @@ class SocketGameState(Enum):
     JUST_CONNECTED: int = auto()
     IN_WAITROOM: int = auto()
     IN_GAME: int = auto()
+    ENDING_GAME: int = auto()
 
 
 def get_race_rounds(words) -> List[RaceRound]:
@@ -32,4 +33,4 @@ def get_race_rounds(words) -> List[RaceRound]:
 
 def get_words_for_play():
     word_set = WordSet.objects.order_by("?")[0]
-    return list(word_set.words.all().values("polish", "english"))
+    return list(word_set.words.all().values("polish", "english")), word_set
