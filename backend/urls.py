@@ -24,6 +24,7 @@ router = routers.DefaultRouter()
 router.register("translation", views.TranslationReadOnlySet, basename="translation")
 router.register("wordset", views.WordSetReadOnlySet, basename="wordset")
 router.register("memory-game", views.MemoryGameSessionViewSet, basename="memory-game")
+router.register("falling-words", views.FallingWordsSessionViewSet, basename="falling-words")
 
 urlpatterns = [
     path("", include(router.urls)),

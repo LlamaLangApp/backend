@@ -43,6 +43,10 @@ class MemoryGameSession(BaseGameSession):
     pass
 
 
+class FallingWordsGameSession(BaseGameSession):
+    pass
+
+
 class RaceGameSession(BaseGameSession):
     opponents = models.ManyToManyField("auth.User", related_name="race_game_sessions", blank=True)
 

@@ -6,7 +6,7 @@ from api.serializers import (
     WordSetSerializer,
     MemoryGameSessionSerializer,
 )
-from api.models import Translation, WordSet, MemoryGameSession
+from api.models import Translation, WordSet, MemoryGameSession, FallingWordsGameSession
 from rest_framework.response import Response
 
 
@@ -46,3 +46,18 @@ class MemoryGameSessionViewSet(viewsets.ModelViewSet):
             return MemoryGameSession.objects.filter(wordset=wordset)
 
         return MemoryGameSession.objects.all()
+
+
+class FallingWordsSessionViewSet(viewsets.ModelViewSet):
+    queryset = FallingWordsGameSession.objects.all()
+    serializer_class = FallingWordsGameSessionSerializer
+    http_method_names = ["get", "post", "head", "options"]
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        wordset = self.request.query_params.get("wordset", None)
+
+        if wordset:
+            return FallingWordsGameSession.objects.filter(wordset=wordset)
+
+        return FallingWordsGameSession.objects.all()

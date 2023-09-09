@@ -1,7 +1,7 @@
 # serializers.py
 
 from rest_framework import serializers
-from api.models import Translation, WordSet, MemoryGameSession
+from api.models import Translation, WordSet, MemoryGameSession, FallingWordsGameSession
 
 
 class TranslationSerializer(serializers.ModelSerializer):
@@ -19,4 +19,10 @@ class WordSetSerializer(serializers.ModelSerializer):
 class MemoryGameSessionSerializer(serializers.ModelSerializer):
     class Meta:
         model = MemoryGameSession
+        fields = '__all__'
+
+
+class FallingWordsGameSessionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = FallingWordsGameSession
         fields = '__all__'
