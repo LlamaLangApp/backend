@@ -29,6 +29,7 @@ router.register("falling-words", views.FallingWordsSessionViewSet, basename="fal
 
 urlpatterns = [
     path("", include(router.urls)),
+    path("statistics/", views.get_statistics),
     path("admin/", admin.site.urls),
     path("auth/", include("djoser.urls")),
     path("auth/", include("djoser.urls.authtoken")),
