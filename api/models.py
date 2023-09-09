@@ -29,6 +29,7 @@ class BaseGameSession(models.Model):
     user = models.ForeignKey("auth.User", on_delete=models.DO_NOTHING, null=False)
     wordset = models.ForeignKey(WordSet, on_delete=models.DO_NOTHING, null=False)
     score = models.IntegerField(validators=[MinValueValidator(0)])
+    duration = models.IntegerField(validators=[MinValueValidator(0)], default=0)  # in seconds
     accuracy = models.FloatField(
         validators=[MinValueValidator(0.0), MaxValueValidator(1.0)]
     )
@@ -39,7 +40,7 @@ class BaseGameSession(models.Model):
 
 
 class MemoryGameSession(BaseGameSession):
-    duration = models.IntegerField(validators=[MinValueValidator(0)])  # in seconds
+    pass
 
 
 class RaceGameSession(BaseGameSession):

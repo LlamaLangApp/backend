@@ -9,6 +9,7 @@ class SocketGameState(Enum):
     JUST_CONNECTED: int = auto()
     IN_WAITROOM: int = auto()
     IN_GAME: int = auto()
+    ENDING_GAME: int = auto()
 
 
 def get_race_rounds(words) -> List[RaceRound]:

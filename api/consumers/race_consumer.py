@@ -1,9 +1,10 @@
 import asyncio
 import json
 from dataclasses import asdict
+from datetime import datetime
 
 from channels.db import database_sync_to_async
-from api.consumers.helpers import get_race_rounds, get_words_for_play
+from api.consumers.helpers import get_race_rounds, get_words_for_play, SocketGameState
 from api.consumers.messages import (
     ResultMessage,
     AnswerMessage,
@@ -20,6 +21,7 @@ class RaceConsumer(WaitListConsumer):
 
     def __init__(self, *args, **kwargs):
         super().__init__(args, kwargs)
+        self.start_game_timestamp = None
         self.game_player = None
         self.last_answer = None
         self.race_active_game = None
@@ -32,14 +34,17 @@ class RaceConsumer(WaitListConsumer):
     async def on_start(self, session_id):
         await self.init_race_active_game(session_id)
         await self.send(await self.create_starting_message())
+        
         await asyncio.sleep(1)
+        
+        self.start_game_timestamp = datetime.now()
         await self.send(await self.create_question_message())
 
     async def on_message(self, message):
         message = AnswerMessage(answer=message["answer"])
 
         if await self.handle_answer(message):
-            await self.group_send("event_send_results", {})
+            await self.group_send("event_end_round", {})
 
     async def on_disconnected(self):
         await self.save_race_game_session()
@@ -52,7 +57,8 @@ class RaceConsumer(WaitListConsumer):
             user=self.user,
             wordset=self.race_active_game.wordset,
             score=self.game_player.score,
-            accuracy=self.game_player.good_answers / self.race_active_game.round_count)
+            accuracy=self.game_player.good_answers / self.race_active_game.round_count,
+            duration=(datetime.now() - self.start_game_timestamp).total_seconds())
         race_game_session.opponents.set(self.race_active_game.players.exclude(user=self.user).values_list("user", flat=True))
         race_game_session.save()
 
@@ -139,13 +145,19 @@ class RaceConsumer(WaitListConsumer):
 
         self.race_active_game = None
 
-    # Group events
-    async def event_send_results(self, event):
+    async def event_end_round(self, event):
         await self.send(await self.create_result_message())
         await asyncio.sleep(1)
 
         if self.race_active_game.round_count < self.DEFAULT_ROUNDS_COUNT:
-            message = await self.create_question_message()
-            await self.send(message)
+            await self.send_next_question()
         else:
-            await self.send(await self.create_game_results_message())
+            self.__state = SocketGameState.ENDING_GAME
+            await self.send_game_results()
+
+    async def send_next_question(self):
+        message = await self.create_question_message()
+        await self.send(message)
+
+    async def send_game_results(self):
+        await self.send(await self.create_game_results_message())
