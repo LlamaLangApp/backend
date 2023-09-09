@@ -24,15 +24,26 @@ class WordSet(models.Model):
         return self.english
 
 
-class MemoryGameSession(models.Model):
+# Game Sessions
+class BaseGameSession(models.Model):
     user = models.ForeignKey("auth.User", on_delete=models.DO_NOTHING, null=False)
     wordset = models.ForeignKey(WordSet, on_delete=models.DO_NOTHING, null=False)
     score = models.IntegerField(validators=[MinValueValidator(0)])
     accuracy = models.FloatField(
         validators=[MinValueValidator(0.0), MaxValueValidator(1.0)]
     )
+    timestamp = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        abstract = True
+
+
+class MemoryGameSession(BaseGameSession):
     duration = models.IntegerField(validators=[MinValueValidator(0)])  # in seconds
-    timestamp = models.DateTimeField(auto_now_add=False)
+
+
+class RaceGameSession(BaseGameSession):
+    opponents = models.ManyToManyField("auth.User", related_name="race_game_sessions", blank=True)
 
 
 class MultiplayerGames(models.TextChoices):
@@ -73,6 +84,7 @@ class RaceRound:
 class GamePlayer(models.Model):
     score = models.IntegerField(default=0)
     user = models.ForeignKey("auth.User", on_delete=models.DO_NOTHING, null=False)
+    good_answers = models.IntegerField(default=0)
 
     def get_username(self):
         return self.user.username
@@ -81,12 +93,17 @@ class GamePlayer(models.Model):
         self.score = F('score') + points_to_add
         self.save()
 
+    def add_good_answer(self):
+        self.good_answers = F('good_answers') + 1
+        self.save()
+
 
 class RaceActiveGame(models.Model):
-    players = models.ManyToManyField(GamePlayer, related_name='race_active_games')
+    players = models.ManyToManyField(GamePlayer, related_name='race_active_games', blank=True, null=True)
     answers_count = models.IntegerField(default=0)
     round_count = models.IntegerField(default=0)
-    # Contains an array of `RaceRound``
+    wordset = models.ForeignKey(WordSet, on_delete=models.DO_NOTHING, null=True)
+    # Contains an array of `RaceRound` objects
     rounds = models.JSONField()
 
     def add_player_to_active_game(self, player):
@@ -104,10 +121,3 @@ class RaceActiveGame(models.Model):
     def reset_answers_count(self):
         self.answers_count = 0
         self.save()
-
-    # def remove_player_from_active_game(self, player):
-    #     self.players.remove(player)
-
-    # def increment_round_count(self):
-    #     self.round_count += 1
-    #     self.save()

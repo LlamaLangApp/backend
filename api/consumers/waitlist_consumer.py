@@ -12,12 +12,19 @@ User = get_user_model()
 
 class WaitListConsumer(AsyncWebsocketConsumer):
     """
-    WebSocket consumer for managing game waitlist and game initialization.
+    WebSocket consumer for managing game wait-list and game initialization.
     """
 
     EVENT_START_GAME = "event_start_game"
 
     # Websocket functions
+    def __init__(self, *args, **kwargs):
+        super().__init__(args, kwargs)
+        self.room = None
+        self.user = None
+        self.__group_name = None
+        self.__state = None
+
     async def connect(self):
         if self.scope["user"].is_authenticated:
             self.user = self.scope["user"]
@@ -42,6 +49,7 @@ class WaitListConsumer(AsyncWebsocketConsumer):
         self.__state = None
         self.__group_name = None
         self.user = None
+
 
     async def receive(self, text_data):
         try:
@@ -73,9 +81,9 @@ class WaitListConsumer(AsyncWebsocketConsumer):
         self.__state = SocketGameState.IN_WAITROOM
 
     async def try_init_game(self, message):
-        '''
-        If waitroom is full, init game and send start game events to players.
-        '''
+        """
+        If wait-room is full, init game and send start game events to players.
+        """
 
         is_full, players = await self.is_waitroom_full(message.game)
 
@@ -85,24 +93,24 @@ class WaitListConsumer(AsyncWebsocketConsumer):
 
     # Group events
     async def send_start_game_event(self, session_id):
-        '''
+        """
         Send start game event to all connected users.
-        '''
+        """
         await self.group_send(self.EVENT_START_GAME, {"session_id": session_id})
 
     async def event_start_game(self, event):
-        '''
+        """
         Start game for user.
-        '''
+        """
         self.__state = SocketGameState.IN_GAME
         await self.on_start(event["session_id"])
 
     # Group Utils
     async def group_send(self, event_name, args):
-        '''
-        Broadcasts messages to every connected user in group (waitroom).
+        """
+        Broadcasts messages to every connected user in group (wait-room).
         Triggers event handler method.
-        '''
+        """
         await self.channel_layer.group_send(
             self.__group_name,
             {"type": event_name.replace("_", "."), **args},
@@ -127,8 +135,8 @@ class WaitListConsumer(AsyncWebsocketConsumer):
     @database_sync_to_async
     def is_waitroom_full(self, game):
         """
-        First result value is True if the waitroom is full, False otherwise
-        If the waitroom is full it's deleted and the second result is
+        First result value is True if the wait-room is full, False otherwise
+        If the wait-room is full it's deleted and the second result is
         a list of the player ids, otherwise it's None
         """
         if self.room.is_full():
