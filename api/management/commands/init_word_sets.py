@@ -16,6 +16,12 @@ class Command(BaseCommand):
         food_set.words.create(polish="ryż", english="rice")
         food_set.words.create(polish="jabłko", english="apple")
         food_set.words.create(polish="banan", english="banana")
+        food_set.words.create(polish="marchew", english="carrot")
+        food_set.words.create(polish="pomidor", english="tomato")
+        food_set.words.create(polish="ziemniak", english="potato")
+        food_set.words.create(polish="papryka", english="pepper")
+        food_set.words.create(polish="pomarańcza", english="orange")
+        food_set.words.create(polish="winogrona", english="grapes")
         food_set.save()
 
         animal_set = WordSet(polish="zwierzęta", english="animals")

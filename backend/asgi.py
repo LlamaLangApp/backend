@@ -17,7 +17,7 @@ from channels.db import database_sync_to_async
 from django.core.asgi import get_asgi_application
 from django.urls import path
 
-from api import consumers
+from api.consumers import race_consumer
 
 
 @database_sync_to_async
@@ -46,7 +46,7 @@ class TokenAuthMiddleWare(BaseMiddleware):
 
 
 urlpatterns = [
-    path("race/", consumers.RaceConsumer.as_asgi()),
+    path("race/", race_consumer.RaceConsumer.as_asgi()),
 ]
 
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "backend.settings")
