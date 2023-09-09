@@ -4,7 +4,7 @@ from rest_framework.decorators import action
 from api.serializers import (
     TranslationSerializer,
     WordSetSerializer,
-    MemoryGameSessionSerializer,
+    MemoryGameSessionSerializer, FallingWordsGameSessionSerializer,
 )
 from api.models import Translation, WordSet, MemoryGameSession, FallingWordsGameSession
 from rest_framework.response import Response
