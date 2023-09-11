@@ -1,5 +1,6 @@
 from django.core.management.base import BaseCommand
-from django.contrib.auth.models import User
+
+from api.models import CustomUser
 
 
 class Command(BaseCommand):
@@ -8,4 +9,4 @@ class Command(BaseCommand):
         parser.add_argument("password", type=str)
 
     def handle(self, **options):
-        User.objects.create_user(options['username'], password=options['password'])
+        CustomUser.objects.create_user(options['username'], password=options['password'])
