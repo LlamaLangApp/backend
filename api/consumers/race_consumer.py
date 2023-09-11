@@ -4,6 +4,8 @@ from dataclasses import asdict
 from datetime import datetime
 
 from channels.db import database_sync_to_async
+from django.core.exceptions import ObjectDoesNotExist
+
 from api.consumers.helpers import get_race_rounds, get_words_for_play, SocketGameState
 from api.consumers.messages import (
     ResultMessage,
@@ -135,15 +137,14 @@ class RaceConsumer(WaitListConsumer):
 
     @database_sync_to_async
     def clear_race_active_game(self):
-        self.race_active_game.refresh_from_db()
-        self.race_active_game.add_answer()
-
-        if self.race_active_game.answers_count == len(self.race_active_game.players.all()):
-            for player in self.race_active_game.players.all():
-                player.delete()
-            self.race_active_game.delete()
-
-        self.race_active_game = None
+        if self.race_active_game:
+            try:
+                self.race_active_game.refresh_from_db()
+                self.race_active_game.delete()
+            except ObjectDoesNotExist:
+                pass
+            finally:
+                self.race_active_game = None
 
     async def event_end_round(self, event):
         await self.send(await self.create_result_message())
