@@ -29,6 +29,7 @@ class WordSet(models.Model):
 class ScoreHistory(models.Model):
     user = models.ForeignKey("CustomUser", on_delete=models.CASCADE)
     date = models.DateTimeField(auto_now_add=True)
+    game_name = models.CharField(max_length=20, default="")
     score_gained = models.PositiveIntegerField()
 
 
@@ -40,17 +41,22 @@ class CustomUser(AbstractUser):
         self.level = self.score // POINTS_PER_LEVEL + 1
         self.save()
 
-    def add_score(self, score):
+    def add_score(self, score, game_name):
         with transaction.atomic():
             self.score = self.score + score
             self.save()
             self.calculate_level()
 
-            ScoreHistory.objects.create(user=self, score_gained=score)
-
+            ScoreHistory.objects.create(user=self, score_gained=score, game_name=game_name)
 
 # Game Sessions
 class BaseGameSession(models.Model):
+    GAME_CHOICES = [
+        ('memory', 'Memory'),
+        ('falling_words', 'Falling Words'),
+        ('race', 'Race'),
+    ]
+
     user = models.ForeignKey("CustomUser", on_delete=models.DO_NOTHING, null=False)
     wordset = models.ForeignKey(WordSet, on_delete=models.DO_NOTHING, null=False)
     score = models.IntegerField(validators=[MinValueValidator(0)])
@@ -59,25 +65,34 @@ class BaseGameSession(models.Model):
         validators=[MinValueValidator(0.0), MaxValueValidator(1.0)]
     )
     timestamp = models.DateTimeField(auto_now_add=False)
+    game_name = models.CharField(max_length=20, choices=GAME_CHOICES, default='memory')  # Default to 'memory'
 
     class Meta:
         abstract = True
 
     def save(self, *args, **kwargs):
-        self.user.add_score(self.score)
+        self.user.add_score(self.score, self.game_name)
         super(BaseGameSession, self).save(*args, **kwargs)
 
 
 class MemoryGameSession(BaseGameSession):
-    pass
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.game_name = 'memory'
 
 
 class FallingWordsGameSession(BaseGameSession):
-    pass
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.game_name = 'falling_words'
 
 
 class RaceGameSession(BaseGameSession):
     opponents = models.ManyToManyField("CustomUser", related_name="race_game_sessions", blank=True)
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.game_name = 'race'
 
 
 class MultiplayerGames(models.TextChoices):
