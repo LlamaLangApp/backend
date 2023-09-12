@@ -1,17 +1,19 @@
 # views.py
 import json
-from datetime import datetime, timezone
-
+from django.db import models
+from django.http import HttpResponseBadRequest
 from rest_framework import viewsets, permissions, status
-from rest_framework.decorators import action
+from rest_framework.decorators import action, api_view, permission_classes
 
 from api.serializers import (
     TranslationSerializer,
     WordSetSerializer,
-    MemoryGameSessionSerializer, FallingWordsGameSessionSerializer
+    MemoryGameSessionSerializer,
+    FallingWordsGameSessionSerializer,
 )
 from api.models import Translation, WordSet, MemoryGameSession, FallingWordsGameSession
 from rest_framework.response import Response
+from datetime import datetime, timezone, timedelta
 
 
 class TranslationReadOnlySet(viewsets.ReadOnlyModelViewSet):
@@ -81,3 +83,53 @@ class MemoryGameSessionViewSet(BaseGameSessionViewSet):
 class FallingWordsSessionViewSet(BaseGameSessionViewSet):
     queryset = FallingWordsGameSession.objects.all()
     serializer_class = FallingWordsGameSessionSerializer
+
+@api_view(["POST"])
+@permission_classes((permissions.IsAuthenticated,))
+def get_statistics(request):
+    body = json.loads(request.body)
+    game, period, statistic, aggregate = (
+        body["game"],
+        body["period"],
+        body["statistic"],
+        body["aggregate"],
+    )
+
+    if not game or not period or not statistic:
+        return HttpResponseBadRequest(
+            "Body must contains 'game', 'period' and 'statistic'"
+        )
+
+    objects = None
+    if game == "memory":
+        objects = MemoryGameSession.objects
+
+    if not objects:
+        return HttpResponseBadRequest("Unknown game")
+
+    if period == "all_time":
+        pass
+    elif period == "this_week":
+        current_time = datetime.utcnow()
+        start_of_week = current_time - timedelta(days=current_time.weekday())
+        end_of_week = start_of_week + timedelta(weeks=1)
+        objects = objects.filter(timestamp__range=(start_of_week, end_of_week))
+    else:
+        return HttpResponseBadRequest("Unknown period")
+
+    agg = None
+    if aggregate == "sum":
+        # TODO: I think this is an sql injection
+        agg = models.Sum(statistic)
+    elif aggregate == "avg":
+        agg = models.Avg(statistic)
+    elif aggregate == "min":
+        agg = models.Min(statistic)
+    elif aggregate == "count":
+        agg = models.Count("id")
+    else:
+        return HttpResponseBadRequest("Unknown aggregate")
+
+    result = objects.values(username=models.F("user__username")).annotate(stat=agg)
+
+    return Response(data=list(result))

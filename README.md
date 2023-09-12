@@ -31,6 +31,12 @@ python -m venv venv
 pip install -r requirements.txt
 ```
 
+If it doesn't work also try:
+
+```commandline
+python manage.py runserver 0.0.0.0:8000
+```
+
 5. Run the server
 
 ```commandline
@@ -73,4 +79,3 @@ Run
 ```commandline
 python .\manage.py generateschema --format=openapi-json --file openapi.json
 ```
-
