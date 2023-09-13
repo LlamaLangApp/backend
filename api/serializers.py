@@ -10,20 +10,23 @@ from djoser.serializers import UserCreateSerializer, UserSerializer
 class CustomUserCreateSerializer(UserCreateSerializer):
     class Meta(UserCreateSerializer.Meta):
         model = CustomUser
-        fields = ('id', 'username', 'email', 'password')
+        fields = ('id', 'username', 'email', 'password', 'avatar')
 
 
 class CustomUserSerializer(UserSerializer):
     class Meta(UserSerializer.Meta):
         model = CustomUser
-        fields = ('id', 'username', 'email', 'level')
+        read_only_fields = ('level', 'avatar')
+        fields = ('id', 'username', 'email', 'level', 'avatar')
 
 
 class MyProfileSerializer(serializers.ModelSerializer):
     current_week_points = serializers.SerializerMethodField()
+
     class Meta:
         model = CustomUser
-        fields = ('id', 'username', 'email', 'score', 'level', 'current_week_points')
+        read_only_fields = ('level', 'current_week_points', 'score')
+        fields = ('id', 'username', 'email', 'score', 'level', 'avatar', 'current_week_points')
 
     def get_current_week_points(self, obj):
         request = self.context.get('request')
