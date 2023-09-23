@@ -36,6 +36,7 @@ class ScoreHistory(models.Model):
 class CustomUser(AbstractUser):
     score = models.PositiveIntegerField(default=0)
     level = models.PositiveIntegerField(blank=False, default=1)
+    avatar = models.ImageField(upload_to='avatars/', null=True, blank=True)
 
     def calculate_level(self):
         self.level = self.score // POINTS_PER_LEVEL + 1
@@ -48,6 +49,7 @@ class CustomUser(AbstractUser):
             self.calculate_level()
 
             ScoreHistory.objects.create(user=self, score_gained=score, game_name=game_name)
+
 
 # Game Sessions
 class BaseGameSession(models.Model):

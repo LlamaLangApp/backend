@@ -31,6 +31,7 @@ urlpatterns = [
     path("", include(router.urls)),
     path("statistics/", views.get_statistics),
     path("admin/", admin.site.urls),
+    path("avatar-upload/", views.UpdateProfileView.as_view(), name="avatar-upload"),
     path("auth/", include("djoser.urls")),
     path("auth/", include("djoser.urls.authtoken")),
 ]

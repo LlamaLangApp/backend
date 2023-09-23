@@ -1,17 +1,20 @@
 # views.py
 import json
+
+from rest_framework import generics
 from django.db import models
 from django.http import HttpResponseBadRequest
-from rest_framework import viewsets, permissions, status
+from rest_framework import viewsets, permissions
 from rest_framework.decorators import action, api_view, permission_classes
 
 from api.serializers import (
     TranslationSerializer,
     WordSetSerializer,
-    MemoryGameSessionSerializer,
-    FallingWordsGameSessionSerializer,
+    MemoryGameSessionSerializer, FallingWordsGameSessionSerializer, MyProfileSerializer
 )
-from api.models import Translation, WordSet, MemoryGameSession, FallingWordsGameSession
+from api.models import Translation, WordSet, MemoryGameSession, FallingWordsGameSession, CustomUser
+from rest_framework import status
+from rest_framework.parsers import MultiPartParser
 from rest_framework.response import Response
 from datetime import datetime, timezone, timedelta
 
@@ -83,6 +86,29 @@ class MemoryGameSessionViewSet(BaseGameSessionViewSet):
 class FallingWordsSessionViewSet(BaseGameSessionViewSet):
     queryset = FallingWordsGameSession.objects.all()
     serializer_class = FallingWordsGameSessionSerializer
+
+
+class UpdateProfileView(generics.UpdateAPIView):
+    serializer_class = MyProfileSerializer
+    parser_classes = (MultiPartParser,)
+
+    def put(self, request, *args, **kwargs):
+        instance = self.request.user
+        serializer = self.get_serializer(instance, data=request.data, partial=True)
+
+        if serializer.is_valid():
+            avatar = request.data.get('avatar')
+            if avatar:
+                user_id = instance.id
+                new_avatar_name = f'user_{user_id}.jpg'
+
+                avatar.name = new_avatar_name
+
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_200_OK)
+
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
 
 @api_view(["POST"])
 @permission_classes((permissions.IsAuthenticated,))

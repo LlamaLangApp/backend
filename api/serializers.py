@@ -1,4 +1,5 @@
 # serializers.py
+from django.core.files.base import ContentFile
 from django.db.models import Sum
 from rest_framework import serializers
 
@@ -10,20 +11,24 @@ from djoser.serializers import UserCreateSerializer, UserSerializer
 class CustomUserCreateSerializer(UserCreateSerializer):
     class Meta(UserCreateSerializer.Meta):
         model = CustomUser
-        fields = ('id', 'username', 'email', 'password')
+        fields = ('id', 'username', 'email', 'password', 'avatar')
 
 
 class CustomUserSerializer(UserSerializer):
     class Meta(UserSerializer.Meta):
         model = CustomUser
-        fields = ('id', 'username', 'email', 'level')
+        read_only_fields = ('level', 'avatar')
+        fields = ('id', 'username', 'email', 'level', 'avatar')
 
 
 class MyProfileSerializer(serializers.ModelSerializer):
+    avatar = serializers.ImageField(required=False)
     current_week_points = serializers.SerializerMethodField()
+
     class Meta:
         model = CustomUser
-        fields = ('id', 'username', 'email', 'score', 'level', 'current_week_points')
+        read_only_fields = ('level', 'current_week_points', 'score')
+        fields = ('id', 'username', 'email', 'score', 'level', 'avatar', 'current_week_points')
 
     def get_current_week_points(self, obj):
         request = self.context.get('request')
@@ -60,3 +65,5 @@ class FallingWordsGameSessionSerializer(serializers.ModelSerializer):
     class Meta:
         model = FallingWordsGameSession
         fields = '__all__'
+
+
