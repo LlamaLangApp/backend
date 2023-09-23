@@ -11,12 +11,10 @@ from api.serializers import (
     MemoryGameSessionSerializer, FallingWordsGameSessionSerializer, MyProfileSerializer
 )
 from api.models import Translation, WordSet, MemoryGameSession, FallingWordsGameSession, CustomUser
+from rest_framework import status
+from rest_framework.parsers import MultiPartParser
 from rest_framework.response import Response
 
-from rest_framework import status
-from rest_framework.parsers import MultiPartParser, FormParser
-from rest_framework.response import Response
-from rest_framework.views import APIView
 
 class TranslationReadOnlySet(viewsets.ReadOnlyModelViewSet):
     queryset = Translation.objects.all()
