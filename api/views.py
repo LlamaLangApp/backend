@@ -2,17 +2,21 @@
 import json
 from datetime import datetime, timezone
 
-from rest_framework import viewsets, permissions, status
+from rest_framework import viewsets, permissions, status, generics
 from rest_framework.decorators import action
 
 from api.serializers import (
     TranslationSerializer,
     WordSetSerializer,
-    MemoryGameSessionSerializer, FallingWordsGameSessionSerializer
+    MemoryGameSessionSerializer, FallingWordsGameSessionSerializer, MyProfileSerializer
 )
-from api.models import Translation, WordSet, MemoryGameSession, FallingWordsGameSession
+from api.models import Translation, WordSet, MemoryGameSession, FallingWordsGameSession, CustomUser
 from rest_framework.response import Response
 
+from rest_framework import status
+from rest_framework.parsers import MultiPartParser, FormParser
+from rest_framework.response import Response
+from rest_framework.views import APIView
 
 class TranslationReadOnlySet(viewsets.ReadOnlyModelViewSet):
     queryset = Translation.objects.all()
@@ -81,3 +85,25 @@ class MemoryGameSessionViewSet(BaseGameSessionViewSet):
 class FallingWordsSessionViewSet(BaseGameSessionViewSet):
     queryset = FallingWordsGameSession.objects.all()
     serializer_class = FallingWordsGameSessionSerializer
+
+
+class UpdateProfileView(generics.UpdateAPIView):
+    serializer_class = MyProfileSerializer
+    parser_classes = (MultiPartParser,)
+
+    def put(self, request, *args, **kwargs):
+        instance = self.request.user
+        serializer = self.get_serializer(instance, data=request.data, partial=True)
+
+        if serializer.is_valid():
+            avatar = request.data.get('avatar')
+            if avatar:
+                user_id = instance.id
+                new_avatar_name = f'user_{user_id}.jpg'
+
+                avatar.name = new_avatar_name
+
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_200_OK)
+
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)

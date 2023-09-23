@@ -13,15 +13,6 @@ class CustomUserCreateSerializer(UserCreateSerializer):
         model = CustomUser
         fields = ('id', 'username', 'email', 'password', 'avatar')
 
-    def set_avatar(self, instance, validated_data):
-        avatar_file = validated_data.get('avatar')
-
-        if avatar_file:
-            binary_data = avatar_file.read()
-
-            instance.avatar = ContentFile(binary_data, name=avatar_file.name)
-            instance.save()
-
 
 class CustomUserSerializer(UserSerializer):
     class Meta(UserSerializer.Meta):
@@ -31,6 +22,7 @@ class CustomUserSerializer(UserSerializer):
 
 
 class MyProfileSerializer(serializers.ModelSerializer):
+    avatar = serializers.ImageField(required=False)
     current_week_points = serializers.SerializerMethodField()
 
     class Meta:
@@ -49,15 +41,6 @@ class MyProfileSerializer(serializers.ModelSerializer):
 
             return current_week_points
         return 0
-
-    def set_avatar(self, instance, validated_data):
-        avatar_file = validated_data.get('avatar')
-
-        if avatar_file:
-            binary_data = avatar_file.read()
-
-            instance.avatar = ContentFile(binary_data, name=avatar_file.name)
-            instance.save()
 
 
 class TranslationSerializer(serializers.ModelSerializer):
@@ -82,3 +65,5 @@ class FallingWordsGameSessionSerializer(serializers.ModelSerializer):
     class Meta:
         model = FallingWordsGameSession
         fields = '__all__'
+
+
