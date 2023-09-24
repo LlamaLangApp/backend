@@ -4,7 +4,8 @@ from django.db.models import Sum
 from rest_framework import serializers
 
 from api.helpers import calculate_current_week_start
-from api.models import Translation, WordSet, MemoryGameSession, FallingWordsGameSession, CustomUser, ScoreHistory
+from api.models import Translation, WordSet, MemoryGameSession, FallingWordsGameSession, CustomUser, ScoreHistory, \
+    Friendship, FriendRequest
 from djoser.serializers import UserCreateSerializer, UserSerializer
 
 
@@ -18,7 +19,7 @@ class CustomUserSerializer(UserSerializer):
     class Meta(UserSerializer.Meta):
         model = CustomUser
         read_only_fields = ('level', 'avatar')
-        fields = ('id', 'username', 'email', 'level', 'avatar')
+        fields = ('id', 'username', 'level', 'avatar')
 
 
 class MyProfileSerializer(serializers.ModelSerializer):
@@ -67,3 +68,22 @@ class FallingWordsGameSessionSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 
+class FriendAccountSerializer(UserSerializer):
+    class Meta(UserSerializer.Meta):
+        fields = ('id', 'username', 'email', 'level', 'avatar')
+
+
+class FriendshipSerializer(serializers.ModelSerializer):
+    friendship_id = serializers.IntegerField(source='id', read_only=True)
+    friend = FriendAccountSerializer()
+
+    class Meta:
+        model = Friendship
+        fields = ['friendship_id', 'friend']
+
+
+class FriendRequestSerializer(serializers.ModelSerializer):
+    accepted = serializers.BooleanField(required=False)
+    class Meta:
+        model = FriendRequest
+        fields = '__all__'
