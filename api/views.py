@@ -168,6 +168,18 @@ class FriendRequestViewSet(viewsets.ModelViewSet):
     queryset = FriendRequest.objects.all()
     serializer_class = FriendRequestSerializer
 
+    @action(detail=True, methods=["get"])
+    def received(self, request, *args, **kwargs):
+        queryset = FriendRequest.objects.filter(receiver=self.request.user)
+        serializer = self.get_serializer(queryset, many=True)
+        return Response(serializer.data)
+
+    @action(detail=True, methods=["get"])
+    def sent(self, request, *args, **kwargs):
+        queryset = FriendRequest.objects.filter(sender=self.request.user)
+        serializer = self.get_serializer(queryset, many=True)
+        return Response(serializer.data)
+
     def perform_create(self, serializer):
         if Friendship.objects.filter(user=self.request.user, friend=serializer.validated_data['receiver']).exists()\
                 and Friendship.objects.filter(user=serializer.validated_data['receiver'], friend=self.request.user).exists():
