@@ -84,16 +84,19 @@ class BaseGameSessionViewSet(viewsets.ModelViewSet):
 class MemoryGameSessionViewSet(BaseGameSessionViewSet):
     queryset = MemoryGameSession.objects.all()
     serializer_class = MemoryGameSessionSerializer
+    permission_classes = [permissions.IsAuthenticated]
 
 
 class FallingWordsSessionViewSet(BaseGameSessionViewSet):
     queryset = FallingWordsGameSession.objects.all()
     serializer_class = FallingWordsGameSessionSerializer
+    permission_classes = [permissions.IsAuthenticated]
 
 
 class UpdateProfileView(generics.UpdateAPIView):
     serializer_class = MyProfileSerializer
     parser_classes = (MultiPartParser,)
+    permission_classes = [permissions.IsAuthenticated]
 
     def put(self, request, *args, **kwargs):
         instance = self.request.user
@@ -167,6 +170,7 @@ def get_statistics(request):
 class FriendRequestViewSet(viewsets.ModelViewSet):
     queryset = FriendRequest.objects.all()
     serializer_class = FriendRequestSerializer
+    permission_classes = [permissions.IsAuthenticated]
 
     @action(detail=True, methods=["get"])
     def received(self, request, *args, **kwargs):
@@ -234,6 +238,7 @@ class FriendRequestViewSet(viewsets.ModelViewSet):
 class FriendshipViewSet(viewsets.ModelViewSet):
     queryset = Friendship.objects.all()
     serializer_class = FriendshipSerializer
+    permission_classes = [permissions.IsAuthenticated]
 
     http_method_names = ['get', 'delete', 'head', 'options']
 

@@ -13,6 +13,7 @@ POINTS_PER_LEVEL = 100
 class Translation(models.Model):
     english = models.CharField(max_length=64)
     polish = models.CharField(max_length=64)
+    starred_by = models.ManyToManyField(settings.AUTH_USER_MODEL, related_name='favorite_translations', blank=True)
 
     def __str__(self) -> str:
         return self.english
