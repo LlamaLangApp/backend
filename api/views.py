@@ -22,10 +22,58 @@ from rest_framework.response import Response
 from datetime import datetime, timezone, timedelta
 
 
-class TranslationReadOnlySet(viewsets.ReadOnlyModelViewSet):
+class TranslationViewSet(viewsets.ModelViewSet):
     queryset = Translation.objects.all()
     serializer_class = TranslationSerializer
     permission_classes = [permissions.IsAuthenticated]
+
+    @action(detail=True, methods=["put"])
+    def toggle_star(self, request, pk=None):
+        translation = self.get_object()
+        user = request.user
+
+        if translation.starred_by.filter(id=user.id).exists():
+            translation.starred_by.remove(user)
+        else:
+            translation.starred_by.add(user)
+        translation.save()
+
+        star = translation.starred_by.filter(id=user.id).exists()
+
+        return Response({
+            'id': translation.id,
+            'english': translation.english,
+            'polish': translation.polish,
+            'star': star
+        })
+
+    def list(self, request, *args, **kwargs):
+        queryset = self.filter_queryset(self.get_queryset())
+        user = request.user
+
+        serialized_data = []
+        for translation in queryset:
+            star = translation.starred_by.filter(id=user.id).exists()
+            serialized_data.append({
+                'id': translation.id,
+                'english': translation.english,
+                'polish': translation.polish,
+                'star': star,
+            })
+
+        return Response(serialized_data)
+
+    def retrieve(self, request, *args, **kwargs):
+        instance = self.get_object()
+        user = request.user
+
+        star = instance.starred_by.filter(id=user.id).exists()
+
+        serializer = self.get_serializer(instance)
+        data = serializer.data
+        data['star'] = star
+
+        return Response(data)
 
 
 class WordSetReadOnlySet(viewsets.ReadOnlyModelViewSet):
@@ -40,8 +88,13 @@ class WordSetReadOnlySet(viewsets.ReadOnlyModelViewSet):
 
         if limit:
             translations = wordset.words.order_by("?")[: int(limit)]
+            for translation in translations:
+                translation.star = translation.starred_by.filter(id=request.user.id).exists()
             serializer = TranslationSerializer(translations, many=True)
             return Response(serializer.data)
+
+        for translation in wordset.words.all():
+            translation.star = translation.starred_by.filter(id=request.user.id).exists()
         return Response(TranslationSerializer(wordset.words.all(), many=True).data)
 
 
