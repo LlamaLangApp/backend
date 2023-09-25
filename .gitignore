@@ -131,6 +131,3 @@ cython_debug/
 
 # Ignore openapi file while API not finished
 openapi.json
-
-# Ignore avatars folder
-avatars/

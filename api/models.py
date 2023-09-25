@@ -5,6 +5,8 @@ from django.core.validators import MaxValueValidator, MinValueValidator
 from django.contrib.auth.models import User, AbstractUser
 from django.db.models import F
 
+from backend import settings
+
 POINTS_PER_LEVEL = 100
 
 
@@ -36,7 +38,7 @@ class ScoreHistory(models.Model):
 class CustomUser(AbstractUser):
     score = models.PositiveIntegerField(default=0)
     level = models.PositiveIntegerField(blank=False, default=1)
-    avatar = models.ImageField(upload_to='avatars/', null=True, blank=True)
+    avatar = models.ImageField(upload_to='avatars/', null=True, blank=True, default='avatars/default_avatar.png')
 
     def calculate_level(self):
         self.level = self.score // POINTS_PER_LEVEL + 1
@@ -179,3 +181,21 @@ class RaceActiveGame(models.Model):
                 # player.user.add_score(player.score)
                 player.delete()
             super(RaceActiveGame, self).delete(*args, **kwargs)
+
+
+class FriendRequest(models.Model):
+    sender = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='sent_friend_requests')
+    receiver = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='received_friend_requests')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ['sender', 'receiver']
+
+
+class Friendship(models.Model):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='friend')
+    friend = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='friend_of')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ['user', 'friend']
