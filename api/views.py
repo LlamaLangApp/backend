@@ -12,20 +12,68 @@ from api.serializers import (
     TranslationSerializer,
     WordSetSerializer,
     MemoryGameSessionSerializer, FallingWordsGameSessionSerializer, MyProfileSerializer, FriendRequestSerializer,
-    FriendshipSerializer
+    FriendshipSerializer, AnswerCounterSerializer
 )
 from api.models import Translation, WordSet, MemoryGameSession, FallingWordsGameSession, CustomUser, FriendRequest, \
-    Friendship
+    Friendship, AnswerCounter
 from rest_framework import status
 from rest_framework.parsers import MultiPartParser
 from rest_framework.response import Response
 from datetime import datetime, timezone, timedelta
 
 
-class TranslationReadOnlySet(viewsets.ReadOnlyModelViewSet):
+class TranslationViewSet(viewsets.ModelViewSet):
     queryset = Translation.objects.all()
     serializer_class = TranslationSerializer
     permission_classes = [permissions.IsAuthenticated]
+
+    @action(detail=True, methods=["put"])
+    def toggle_star(self, request, pk=None):
+        translation = self.get_object()
+        user = request.user
+
+        if translation.starred_by.filter(id=user.id).exists():
+            translation.starred_by.remove(user)
+        else:
+            translation.starred_by.add(user)
+        translation.save()
+
+        star = translation.starred_by.filter(id=user.id).exists()
+
+        return Response({
+            'id': translation.id,
+            'english': translation.english,
+            'polish': translation.polish,
+            'star': star
+        })
+
+    def list(self, request, *args, **kwargs):
+        queryset = self.filter_queryset(self.get_queryset())
+        user = request.user
+
+        serialized_data = []
+        for translation in queryset:
+            star = translation.starred_by.filter(id=user.id).exists()
+            serialized_data.append({
+                'id': translation.id,
+                'english': translation.english,
+                'polish': translation.polish,
+                'star': star,
+            })
+
+        return Response(serialized_data)
+
+    def retrieve(self, request, *args, **kwargs):
+        instance = self.get_object()
+        user = request.user
+
+        star = instance.starred_by.filter(id=user.id).exists()
+
+        serializer = self.get_serializer(instance)
+        data = serializer.data
+        data['star'] = star
+
+        return Response(data)
 
 
 class WordSetReadOnlySet(viewsets.ReadOnlyModelViewSet):
@@ -40,8 +88,13 @@ class WordSetReadOnlySet(viewsets.ReadOnlyModelViewSet):
 
         if limit:
             translations = wordset.words.order_by("?")[: int(limit)]
+            for translation in translations:
+                translation.star = translation.starred_by.filter(id=request.user.id).exists()
             serializer = TranslationSerializer(translations, many=True)
             return Response(serializer.data)
+
+        for translation in wordset.words.all():
+            translation.star = translation.starred_by.filter(id=request.user.id).exists()
         return Response(TranslationSerializer(wordset.words.all(), many=True).data)
 
 
@@ -84,16 +137,19 @@ class BaseGameSessionViewSet(viewsets.ModelViewSet):
 class MemoryGameSessionViewSet(BaseGameSessionViewSet):
     queryset = MemoryGameSession.objects.all()
     serializer_class = MemoryGameSessionSerializer
+    permission_classes = [permissions.IsAuthenticated]
 
 
 class FallingWordsSessionViewSet(BaseGameSessionViewSet):
     queryset = FallingWordsGameSession.objects.all()
     serializer_class = FallingWordsGameSessionSerializer
+    permission_classes = [permissions.IsAuthenticated]
 
 
 class UpdateProfileView(generics.UpdateAPIView):
     serializer_class = MyProfileSerializer
     parser_classes = (MultiPartParser,)
+    permission_classes = [permissions.IsAuthenticated]
 
     def put(self, request, *args, **kwargs):
         instance = self.request.user
@@ -167,6 +223,7 @@ def get_statistics(request):
 class FriendRequestViewSet(viewsets.ModelViewSet):
     queryset = FriendRequest.objects.all()
     serializer_class = FriendRequestSerializer
+    permission_classes = [permissions.IsAuthenticated]
 
     @action(detail=True, methods=["get"])
     def received(self, request, *args, **kwargs):
@@ -198,6 +255,7 @@ class FriendRequestViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['patch'])
     def accept(self, request, pk=None):
+        # no body needed
         friend_request = self.get_object()
 
         if friend_request.receiver.id == request.user.id:
@@ -211,6 +269,7 @@ class FriendRequestViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['patch'])
     def reject(self, request, pk=None):
+        # no body needed
         friend_request = self.get_object()
 
         if friend_request.receiver == request.user:
@@ -234,6 +293,7 @@ class FriendRequestViewSet(viewsets.ModelViewSet):
 class FriendshipViewSet(viewsets.ModelViewSet):
     queryset = Friendship.objects.all()
     serializer_class = FriendshipSerializer
+    permission_classes = [permissions.IsAuthenticated]
 
     http_method_names = ['get', 'delete', 'head', 'options']
 
@@ -257,3 +317,26 @@ class FriendshipViewSet(viewsets.ModelViewSet):
         serializer = FriendshipSerializer(friendships, many=True)
 
         return Response(serializer.data)
+
+
+class AnswerCounterViewSet(viewsets.ModelViewSet):
+    queryset = AnswerCounter.objects.all()
+    serializer_class = AnswerCounterSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    http_method_names = ['get', 'post']
+
+    @action(detail=False, methods=['POST'], url_path='increment')
+    def increment(self, request):
+        user = request.user
+        translation_id = request.data.get('translation')
+        AnswerCounter.increment_good_answer(user=user, translation_id=translation_id)
+
+        return Response({'message': 'Good answer counter incremented successfully.'})
+
+    @action(detail=False, methods=['POST'], url_path='decrement')
+    def decrement(self, request):
+        user = request.user
+        translation_id = request.data.get('translation')
+        AnswerCounter.decrement_good_answer(user=user, translation_id=translation_id)
+
+        return Response({'message': 'Bad answer counter incremented successfully.'})

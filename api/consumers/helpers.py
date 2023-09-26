@@ -18,12 +18,14 @@ def get_race_rounds(words) -> List[RaceRound]:
         shuffle(words)
         word = words.pop(0)
         correct_translation = word["polish"]
+        correct_translation_id = word["id"]
 
         incorrect_translations = sample([w["polish"] for w in words], 3)
 
         rounds.append(
             RaceRound(
                 answer=correct_translation,
+                answer_id=correct_translation_id,
                 question=word["english"],
                 options=incorrect_translations + [correct_translation],
             )
@@ -33,4 +35,4 @@ def get_race_rounds(words) -> List[RaceRound]:
 
 def get_words_for_play():
     word_set = WordSet.objects.order_by("?")[0]
-    return list(word_set.words.all().values("polish", "english")), word_set
+    return list(word_set.words.all().values("polish", "english", "id")), word_set

@@ -13,9 +13,36 @@ POINTS_PER_LEVEL = 100
 class Translation(models.Model):
     english = models.CharField(max_length=64)
     polish = models.CharField(max_length=64)
+    starred_by = models.ManyToManyField(settings.AUTH_USER_MODEL, related_name='favorite_translations', blank=True)
 
     def __str__(self) -> str:
         return self.english
+
+
+class AnswerCounter(models.Model):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    translation = models.ForeignKey(Translation, on_delete=models.CASCADE)
+    good_answers_counter = models.PositiveIntegerField(default=0)
+
+    @classmethod
+    def increment_good_answer(cls, user, translation_id):
+        try:
+            answer_counter = cls.objects.get(translation_id=translation_id, user=user)
+            answer_counter.good_answers_counter += 1
+            answer_counter.save()
+        except cls.DoesNotExist:
+            cls.objects.create(translation_id=translation_id, user=user, good_answers_counter=1)
+
+    @classmethod
+    def decrement_good_answer(cls, user, translation_id):
+        try:
+            answer_counter = cls.objects.get(translation_id=translation_id, user=user)
+            if answer_counter.good_answers_counter > 0:
+                answer_counter.good_answers_counter -= 1
+            answer_counter.save()
+        except cls.DoesNotExist:
+            print(translation_id, user)
+            cls.objects.create(translation_id=translation_id, user=user, good_answers_counter=0)
 
 
 class WordSet(models.Model):
@@ -76,6 +103,8 @@ class BaseGameSession(models.Model):
 
     def save(self, *args, **kwargs):
         self.user.add_score(self.score, self.game_name)
+        #add timestamp
+        self.timestamp = self.user.scorehistory_set.last().date
         super(BaseGameSession, self).save(*args, **kwargs)
 
 
@@ -131,6 +160,7 @@ class WaitingRoom(models.Model):
 class RaceRound:
     options: List[str]
     answer: str
+    answer_id: int
     question: str
 
 
@@ -156,6 +186,7 @@ class RaceActiveGame(models.Model):
     answers_count = models.IntegerField(default=0)
     round_count = models.IntegerField(default=0)
     wordset = models.ForeignKey(WordSet, on_delete=models.DO_NOTHING, null=True)
+    timestamp = models.DateTimeField(auto_now_add=True)
     # Contains an array of `RaceRound` objects
     rounds = models.JSONField()
 
