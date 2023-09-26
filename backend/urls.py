@@ -27,13 +27,14 @@ router.register("memory-game", views.MemoryGameSessionViewSet, basename="memory-
 router.register("falling-words", views.FallingWordsSessionViewSet, basename="falling-words")
 router.register("friend-request", views.FriendRequestViewSet, basename="friendship-request")
 router.register("friendship", views.FriendshipViewSet, basename="friendship")
-
-
+router.register("answer-counter", views.AnswerCounterViewSet, basename="answer-counter")
 urlpatterns = [
     path("", include(router.urls)),
     path("statistics/", views.get_statistics),
     path("admin/", admin.site.urls),
     path("avatar-upload/", views.UpdateProfileView.as_view(), name="avatar-upload"),
     path("auth/", include("djoser.urls")),
+    # path("good-answer/increment/", views.GoodAnswerCounterView.as_view(), name="good-answer"),
+    # path("answer-counter/", views.AnswerCounterView.as_view(), name="answer-counter"),
     path("auth/", include("djoser.urls.authtoken")),
 ]

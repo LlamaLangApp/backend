@@ -12,10 +12,10 @@ from api.serializers import (
     TranslationSerializer,
     WordSetSerializer,
     MemoryGameSessionSerializer, FallingWordsGameSessionSerializer, MyProfileSerializer, FriendRequestSerializer,
-    FriendshipSerializer
+    FriendshipSerializer, AnswerCounterSerializer
 )
 from api.models import Translation, WordSet, MemoryGameSession, FallingWordsGameSession, CustomUser, FriendRequest, \
-    Friendship
+    Friendship, AnswerCounter
 from rest_framework import status
 from rest_framework.parsers import MultiPartParser
 from rest_framework.response import Response
@@ -255,6 +255,7 @@ class FriendRequestViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['patch'])
     def accept(self, request, pk=None):
+        # no body needed
         friend_request = self.get_object()
 
         if friend_request.receiver.id == request.user.id:
@@ -268,6 +269,7 @@ class FriendRequestViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['patch'])
     def reject(self, request, pk=None):
+        # no body needed
         friend_request = self.get_object()
 
         if friend_request.receiver == request.user:
@@ -315,3 +317,26 @@ class FriendshipViewSet(viewsets.ModelViewSet):
         serializer = FriendshipSerializer(friendships, many=True)
 
         return Response(serializer.data)
+
+
+class AnswerCounterViewSet(viewsets.ModelViewSet):
+    queryset = AnswerCounter.objects.all()
+    serializer_class = AnswerCounterSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    http_method_names = ['get', 'post']
+
+    @action(detail=False, methods=['POST'], url_path='increment')
+    def increment(self, request):
+        user = request.user
+        translation_id = request.data.get('translation')
+        AnswerCounter.increment_good_answer(user=user, translation_id=translation_id)
+
+        return Response({'message': 'Good answer counter incremented successfully.'})
+
+    @action(detail=False, methods=['POST'], url_path='decrement')
+    def decrement(self, request):
+        user = request.user
+        translation_id = request.data.get('translation')
+        AnswerCounter.decrement_good_answer(user=user, translation_id=translation_id)
+
+        return Response({'message': 'Bad answer counter incremented successfully.'})
