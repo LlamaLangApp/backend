@@ -41,7 +41,6 @@ class AnswerCounter(models.Model):
                 answer_counter.good_answers_counter -= 1
             answer_counter.save()
         except cls.DoesNotExist:
-            print(translation_id, user)
             cls.objects.create(translation_id=translation_id, user=user, good_answers_counter=0)
 
 

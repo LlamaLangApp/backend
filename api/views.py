@@ -69,11 +69,12 @@ class TranslationViewSet(viewsets.ModelViewSet):
 
         star = instance.starred_by.filter(id=user.id).exists()
 
-        serializer = self.get_serializer(instance)
-        data = serializer.data
-        data['star'] = star
-
-        return Response(data)
+        return Response({
+            'id': instance.id,
+            'english': instance.english,
+            'polish': instance.polish,
+            'star': star,
+        })
 
 
 class WordSetReadOnlySet(viewsets.ReadOnlyModelViewSet):
@@ -93,9 +94,12 @@ class WordSetReadOnlySet(viewsets.ReadOnlyModelViewSet):
             serializer = TranslationSerializer(translations, many=True)
             return Response(serializer.data)
 
+        translations = []
         for translation in wordset.words.all():
             translation.star = translation.starred_by.filter(id=request.user.id).exists()
-        return Response(TranslationSerializer(wordset.words.all(), many=True).data)
+            translations.append(translation)
+
+        return Response(TranslationSerializer(translations, many=True).data)
 
 
 class BaseGameSessionViewSet(viewsets.ModelViewSet):
