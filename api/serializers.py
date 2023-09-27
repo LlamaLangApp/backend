@@ -50,12 +50,18 @@ class MyProfileSerializer(serializers.ModelSerializer):
 
 
 class TranslationSerializer(serializers.ModelSerializer):
-    star = serializers.SerializerMethodField()
+    star=serializers.BooleanField(required=False)
 
     class Meta:
         model = Translation
         read_only_fields= ('id', 'english', 'polish')
         fields = ('id', 'english', 'polish', 'star')
+
+    def get_star(self, obj):
+        request = self.context.get('request')
+        if request:
+            return obj.starred_by.filter(id=request.user.id).exists()
+        return False
 
 
 class WordSetSerializer(serializers.ModelSerializer):
