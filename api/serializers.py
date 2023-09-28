@@ -1,5 +1,6 @@
 # serializers.py
 from django.db.models import Sum
+import base64
 from rest_framework import serializers
 
 from api.helpers import calculate_current_week_start
@@ -21,14 +22,23 @@ class AnswerCounterSerializer(serializers.ModelSerializer):
 
 
 class CustomUserSerializer(UserSerializer):
+    avatar = serializers.SerializerMethodField()
+
     class Meta(UserSerializer.Meta):
         model = CustomUser
         read_only_fields = ('level', 'avatar')
         fields = ('id', 'username', 'level', 'avatar')
 
+    def get_avatar(self, obj):
+        if obj.avatar:
+            with open(obj.avatar.path, "rb") as image_file:
+                image_data = base64.b64encode(image_file.read()).decode("utf-8")
+            return image_data
+        return None
+
 
 class MyProfileSerializer(serializers.ModelSerializer):
-    avatar = serializers.ImageField(required=False)
+    avatar = serializers.SerializerMethodField()
     current_week_points = serializers.SerializerMethodField()
 
     class Meta:
@@ -48,13 +58,23 @@ class MyProfileSerializer(serializers.ModelSerializer):
             return current_week_points
         return 0
 
+    def get_avatar(self, obj):
+        request = self.context.get('request')
+        user = request.user
+
+        if user.avatar:
+            with open(user.avatar.path, "rb") as image_file:
+                image_data = base64.b64encode(image_file.read()).decode("utf-8")
+            return image_data
+        return None
+
 
 class TranslationSerializer(serializers.ModelSerializer):
-    star=serializers.BooleanField(required=False)
+    star = serializers.BooleanField(required=False)
 
     class Meta:
         model = Translation
-        read_only_fields= ('id', 'english', 'polish')
+        read_only_fields = ('id', 'english', 'polish')
         fields = ('id', 'english', 'polish', 'star')
 
     def get_star(self, obj):
