@@ -3,9 +3,9 @@ from django.db.models import Sum
 import base64
 from rest_framework import serializers
 
-from api.helpers import calculate_current_week_start
+from api.helpers import calculate_current_week_start, wordset_accuracy_check
 from api.models import Translation, WordSet, MemoryGameSession, FallingWordsGameSession, CustomUser, ScoreHistory, \
-    Friendship, FriendRequest, AnswerCounter
+    Friendship, FriendRequest, TranslationUserAccuracyCounter
 from djoser.serializers import UserCreateSerializer, UserSerializer
 
 
@@ -15,9 +15,9 @@ class CustomUserCreateSerializer(UserCreateSerializer):
         fields = ('id', 'username', 'email', 'password', 'avatar')
 
 
-class AnswerCounterSerializer(serializers.ModelSerializer):
+class TranslationUserAccuracyCounterSerializer(serializers.ModelSerializer):
     class Meta:
-        model = AnswerCounter
+        model = TranslationUserAccuracyCounter
         fields = ("translation", "user")
 
 
@@ -70,7 +70,7 @@ class MyProfileSerializer(serializers.ModelSerializer):
 
 
 class TranslationSerializer(serializers.ModelSerializer):
-    star = serializers.BooleanField(required=False)
+    star = serializers.SerializerMethodField()
 
     class Meta:
         model = Translation
@@ -79,15 +79,35 @@ class TranslationSerializer(serializers.ModelSerializer):
 
     def get_star(self, obj):
         request = self.context.get('request')
+
         if request:
             return obj.starred_by.filter(id=request.user.id).exists()
         return False
 
 
 class WordSetSerializer(serializers.ModelSerializer):
+    locked = serializers.SerializerMethodField()
+
     class Meta:
         model = WordSet
-        fields = '__all__'
+        fields = ('id', 'english', 'polish', 'category', 'difficulty', 'locked')
+
+    def get_locked(self, obj):
+        request = self.context.get('request')
+
+        if request:
+            user = request.user
+            if wordset_accuracy_check(user, obj):
+                return False
+        return True
+
+
+class WordSetAccuracySerializer(serializers.ModelSerializer):
+    accuracy = serializers.FloatField()
+
+    class Meta:
+        model = WordSet
+        fields = ('id', 'accuracy')
 
 
 class MemoryGameSessionSerializer(serializers.ModelSerializer):

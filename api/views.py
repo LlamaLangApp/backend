@@ -8,14 +8,15 @@ from rest_framework import viewsets, permissions
 from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.exceptions import ValidationError
 
+from api.helpers import wordset_accuracy_check
 from api.serializers import (
     TranslationSerializer,
     WordSetSerializer,
     MemoryGameSessionSerializer, FallingWordsGameSessionSerializer, MyProfileSerializer, FriendRequestSerializer,
-    FriendshipSerializer, AnswerCounterSerializer
+    FriendshipSerializer, TranslationUserAccuracyCounterSerializer, WordSetAccuracySerializer
 )
 from api.models import Translation, WordSet, MemoryGameSession, FallingWordsGameSession, CustomUser, FriendRequest, \
-    Friendship, AnswerCounter
+    Friendship, TranslationUserAccuracyCounter
 from rest_framework import status
 from rest_framework.parsers import MultiPartParser
 from rest_framework.response import Response
@@ -82,24 +83,35 @@ class WordSetReadOnlySet(viewsets.ReadOnlyModelViewSet):
     serializer_class = WordSetSerializer
     permission_classes = [permissions.IsAuthenticated]
 
+    def retrieve(self, request, *args, **kwargs):
+        instance = self.get_object()
+        serializer = WordSetSerializer(instance, context={'request': request})
+        return Response(serializer.data)
+
+    def list(self, request, *args, **kwargs):
+        queryset = self.filter_queryset(self.get_queryset())
+        serializer = WordSetSerializer(queryset, many=True, context={'request': request})
+        return Response(serializer.data)
+
     @action(detail=True, methods=["get"])
     def translations(self, request, pk=None):
         limit = request.query_params.get("limit")
         wordset = self.get_object()
 
-        if limit:
-            translations = wordset.words.order_by("?")[: int(limit)]
-            for translation in translations:
-                translation.star = translation.starred_by.filter(id=request.user.id).exists()
-            serializer = TranslationSerializer(translations, many=True)
-            return Response(serializer.data)
+        if not wordset_accuracy_check(request.user, wordset):
+            return Response(status=status.HTTP_403_FORBIDDEN,
+                            data={'message': "You must have an accuracy of at least 70% on previous difficulties in this category to access this " \
+              "resource."})
 
-        translations = []
-        for translation in wordset.words.all():
-            translation.star = translation.starred_by.filter(id=request.user.id).exists()
-            translations.append(translation)
+        return Response(TranslationSerializer(wordset.words.order_by("?")[: int(limit)] if limit else wordset.words, many=True, context={'request': request}).data)
 
-        return Response(TranslationSerializer(translations, many=True).data)
+    @action(detail=True, methods=["get"])
+    def accuracy(self, request, pk=None):
+        user = request.user
+        wordset = self.get_object()
+        accuracy = wordset.calculate_average_accuracy(user)
+        serializer = WordSetAccuracySerializer({'accuracy': accuracy})
+        return Response(serializer.data)
 
 
 class BaseGameSessionViewSet(viewsets.ModelViewSet):
@@ -242,14 +254,17 @@ class FriendRequestViewSet(viewsets.ModelViewSet):
         return Response(serializer.data)
 
     def perform_create(self, serializer):
-        if Friendship.objects.filter(user=self.request.user, friend=serializer.validated_data['receiver']).exists()\
-                and Friendship.objects.filter(user=serializer.validated_data['receiver'], friend=self.request.user).exists():
+        if Friendship.objects.filter(user=self.request.user, friend=serializer.validated_data['receiver']).exists() \
+                and Friendship.objects.filter(user=serializer.validated_data['receiver'],
+                                              friend=self.request.user).exists():
             raise ValidationError('You are already friends')
 
-        if FriendRequest.objects.filter(sender=self.request.user, receiver=serializer.validated_data['receiver']).exists():
+        if FriendRequest.objects.filter(sender=self.request.user,
+                                        receiver=serializer.validated_data['receiver']).exists():
             raise ValidationError('You have already sent a friend request to this user')
 
-        if FriendRequest.objects.filter(sender=serializer.validated_data['receiver'], receiver=self.request.user).exists():
+        if FriendRequest.objects.filter(sender=serializer.validated_data['receiver'],
+                                        receiver=self.request.user).exists():
             raise ValidationError('This user has already sent you a friend request')
 
         if serializer.validated_data['receiver'] == self.request.user:
@@ -323,24 +338,26 @@ class FriendshipViewSet(viewsets.ModelViewSet):
         return Response(serializer.data)
 
 
-class AnswerCounterViewSet(viewsets.ModelViewSet):
-    queryset = AnswerCounter.objects.all()
-    serializer_class = AnswerCounterSerializer
+class TranslationUserAccuracyCounterViewSet(viewsets.ModelViewSet):
+    queryset = TranslationUserAccuracyCounter.objects.all()
+    serializer_class = TranslationUserAccuracyCounterSerializer
     permission_classes = [permissions.IsAuthenticated]
     http_method_names = ['get', 'post']
 
-    @action(detail=False, methods=['POST'], url_path='increment')
-    def increment(self, request):
+    @action(detail=False, methods=['POST'], url_path='good-answer')
+    def good_answer(self, request):
         user = request.user
         translation_id = request.data.get('translation')
-        AnswerCounter.increment_good_answer(user=user, translation_id=translation_id)
+        TranslationUserAccuracyCounter.increment_good_answer(user=user, translation_id=translation_id)
 
         return Response({'message': 'Good answer counter incremented successfully.'})
 
-    @action(detail=False, methods=['POST'], url_path='decrement')
-    def decrement(self, request):
+    @action(detail=False, methods=['POST'], url_path='bad-answer')
+    def bad_answer(self, request):
         user = request.user
         translation_id = request.data.get('translation')
-        AnswerCounter.decrement_good_answer(user=user, translation_id=translation_id)
+        TranslationUserAccuracyCounter.increment_bad_answer(user=user, translation_id=translation_id)
 
         return Response({'message': 'Bad answer counter incremented successfully.'})
+
+

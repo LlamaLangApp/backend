@@ -3,9 +3,10 @@ from typing import List
 from django.db import models, transaction
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.contrib.auth.models import User, AbstractUser
-from django.db.models import F
+from django.db.models import F, Avg
 
 from backend import settings
+
 
 POINTS_PER_LEVEL = 100
 
@@ -19,39 +20,77 @@ class Translation(models.Model):
         return self.english
 
 
-class AnswerCounter(models.Model):
+class TranslationUserAccuracyCounter(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     translation = models.ForeignKey(Translation, on_delete=models.CASCADE)
     good_answers_counter = models.PositiveIntegerField(default=0)
+    bad_answers_counter = models.PositiveIntegerField(default=0)
+    accuracy = models.FloatField(default=0.0, validators=[MinValueValidator(0.0), MaxValueValidator(1.0)])
+
+    def calculate_accuracy(self):
+        if self.good_answers_counter + self.bad_answers_counter == 0:
+            self.accuracy = 0.0
+        else:
+            self.accuracy = round(self.good_answers_counter / (self.good_answers_counter + self.bad_answers_counter), 2)
 
     @classmethod
     def increment_good_answer(cls, user, translation_id):
         try:
             answer_counter = cls.objects.get(translation_id=translation_id, user=user)
             answer_counter.good_answers_counter += 1
+            answer_counter.calculate_accuracy()
             answer_counter.save()
         except cls.DoesNotExist:
-            cls.objects.create(translation_id=translation_id, user=user, good_answers_counter=1)
+            cls.objects.create(translation_id=translation_id, user=user, good_answers_counter=1, bad_answers_counter=0,
+                               accuracy=100.0)
 
     @classmethod
-    def decrement_good_answer(cls, user, translation_id):
+    def increment_bad_answer(cls, user, translation_id):
         try:
             answer_counter = cls.objects.get(translation_id=translation_id, user=user)
-            if answer_counter.good_answers_counter > 0:
-                answer_counter.good_answers_counter -= 1
+            answer_counter.bad_answers_counter += 1
+            answer_counter.calculate_accuracy()
             answer_counter.save()
         except cls.DoesNotExist:
-            cls.objects.create(translation_id=translation_id, user=user, good_answers_counter=0)
+            cls.objects.create(translation_id=translation_id, user=user, good_answers_counter=0, bad_answers_counter=1,
+                               accuracy=0.0)
+
+
+class WordSetCategory(models.TextChoices):
+    FOOD = "food", "Food"
+    ANIMALS = "animals", "Animals"
+    CLOTHES = "clothes", "Clothes"
+    HOUSE = "house", "House"
+    GENERAL = "general", "General"
+    VACATIONS = "vacations", "Vacations"
 
 
 class WordSet(models.Model):
     english = models.TextField()
     polish = models.TextField()
-
+    category = models.CharField(max_length=64, choices=WordSetCategory.choices, default="General")
+    difficulty = models.PositiveIntegerField(default=1)
     words = models.ManyToManyField(Translation)
 
     def __str__(self) -> str:
         return self.english
+
+    def calculate_average_accuracy(self, user):
+        words = self.words.all()
+        total_accuracy = 0.0
+        num_translations = len(words)
+
+        if num_translations == 0 or user is None:
+            return 0.0
+
+        for translation in words:
+            translation_accuracy = TranslationUserAccuracyCounter.objects.filter(translation=translation, user=user)
+            user_accuracy = translation_accuracy.aggregate(Avg("accuracy"))["accuracy__avg"]
+
+            if user_accuracy is not None:
+                total_accuracy += user_accuracy
+
+        return round(total_accuracy / num_translations, 2)
 
 
 class ScoreHistory(models.Model):
@@ -128,7 +167,7 @@ class RaceGameSession(BaseGameSession):
 
 
 class MultiplayerGames(models.TextChoices):
-    RACE = "RACE", "Race"
+    RACE = "race", "Race"
 
 
 class WaitingRoom(models.Model):
