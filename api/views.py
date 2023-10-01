@@ -8,14 +8,12 @@ from rest_framework import viewsets, permissions
 from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.exceptions import ValidationError
 
-from api.helpers import wordset_accuracy_check
 from api.serializers import (
     TranslationSerializer,
-    WordSetSerializer,
     MemoryGameSessionSerializer, FallingWordsGameSessionSerializer, MyProfileSerializer, FriendRequestSerializer,
-    FriendshipSerializer, TranslationUserAccuracyCounterSerializer, WordSetAccuracySerializer
+    FriendshipSerializer, TranslationUserAccuracyCounterSerializer, WordSetSerializer, WordSetWithTranslationSerializer
 )
-from api.models import Translation, WordSet, MemoryGameSession, FallingWordsGameSession, CustomUser, FriendRequest, \
+from api.models import Translation, WordSet, MemoryGameSession, FallingWordsGameSession, FriendRequest, \
     Friendship, TranslationUserAccuracyCounter
 from rest_framework import status
 from rest_framework.parsers import MultiPartParser
@@ -98,20 +96,18 @@ class WordSetReadOnlySet(viewsets.ReadOnlyModelViewSet):
         limit = request.query_params.get("limit")
         wordset = self.get_object()
 
-        if not wordset_accuracy_check(request.user, wordset):
-            return Response(status=status.HTTP_403_FORBIDDEN,
-                            data={'message': "You must have an accuracy of at least 70% on previous difficulties in this category to access this " \
-              "resource."})
+        if not wordset:
+            return Response(status=status.HTTP_404_NOT_FOUND, data={'message': "Wordset not found."})
 
-        return Response(TranslationSerializer(wordset.words.order_by("?")[: int(limit)] if limit else wordset.words, many=True, context={'request': request}).data)
+        serialized_data = WordSetWithTranslationSerializer(wordset,  context={'request': request}).data
 
-    @action(detail=True, methods=["get"])
-    def accuracy(self, request, pk=None):
-        user = request.user
-        wordset = self.get_object()
-        accuracy = wordset.calculate_average_accuracy(user)
-        serializer = WordSetAccuracySerializer({'accuracy': accuracy})
-        return Response(serializer.data)
+        if serialized_data.get('locked'):
+            return Response(status=status.HTTP_403_FORBIDDEN, data={'message': "Wordset is locked."})
+
+        if limit:
+            serialized_data['words'] = serialized_data['words'][:int(limit)]
+
+        return Response(serialized_data)
 
 
 class BaseGameSessionViewSet(viewsets.ModelViewSet):

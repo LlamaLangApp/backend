@@ -3,9 +3,10 @@ from django.db.models import Sum
 import base64
 from rest_framework import serializers
 
-from api.helpers import calculate_current_week_start, wordset_accuracy_check
+from api.exceptions import LockedWordSetException
+from api.helpers import calculate_current_week_start
 from api.models import Translation, WordSet, MemoryGameSession, FallingWordsGameSession, CustomUser, ScoreHistory, \
-    Friendship, FriendRequest, TranslationUserAccuracyCounter
+    Friendship, FriendRequest, TranslationUserAccuracyCounter, WordSetUserAccuracy
 from djoser.serializers import UserCreateSerializer, UserSerializer
 
 
@@ -94,20 +95,20 @@ class WordSetSerializer(serializers.ModelSerializer):
 
     def get_locked(self, obj):
         request = self.context.get('request')
+        user = request.user
 
-        if request:
-            user = request.user
-            if wordset_accuracy_check(user, obj):
-                return False
+        wordset_user_accuracy, _ = WordSetUserAccuracy.objects.get_or_create(user=user, wordset=obj)
+        if wordset_user_accuracy:
+            return wordset_user_accuracy.locked
         return True
 
 
-class WordSetAccuracySerializer(serializers.ModelSerializer):
-    accuracy = serializers.FloatField()
+class WordSetWithTranslationSerializer(WordSetSerializer):
+    words = TranslationSerializer(many=True)
 
     class Meta:
         model = WordSet
-        fields = ('id', 'accuracy')
+        fields = WordSetSerializer.Meta.fields + ('words',)
 
 
 class MemoryGameSessionSerializer(serializers.ModelSerializer):

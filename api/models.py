@@ -76,21 +76,56 @@ class WordSet(models.Model):
         return self.english
 
     def calculate_average_accuracy(self, user):
-        words = self.words.all()
-        total_accuracy = 0.0
-        num_translations = len(words)
+        translations = self.words.all()
+        user_accuracies = TranslationUserAccuracyCounter.objects.filter(translation__in=translations, user=user)
+        avg_accuracy = user_accuracies.aggregate(Avg("accuracy"))["accuracy__avg"]
 
-        if num_translations == 0 or user is None:
+        if avg_accuracy is not None:
+            return round(avg_accuracy, 2)
+        else:
             return 0.0
 
-        for translation in words:
-            translation_accuracy = TranslationUserAccuracyCounter.objects.filter(translation=translation, user=user)
-            user_accuracy = translation_accuracy.aggregate(Avg("accuracy"))["accuracy__avg"]
 
-            if user_accuracy is not None:
-                total_accuracy += user_accuracy
+class WordSetUserAccuracy(models.Model):
+    user = models.ForeignKey("CustomUser", on_delete=models.CASCADE)
+    wordset = models.ForeignKey(WordSet, on_delete=models.CASCADE)
+    accuracy = models.FloatField(default=0.0, validators=[MinValueValidator(0.0), MaxValueValidator(1.0)])
+    unlocked = models.BooleanField(default=False)
+    class Meta:
+        unique_together = ('user', 'wordset')
 
-        return round(total_accuracy / num_translations, 2)
+    @property
+    def locked(self):
+        print("locked")
+        if self.wordset.difficulty == 1 or self.unlocked:
+            self.unlocked = True
+            return False
+
+        lower_difficulty_wordsets = WordSet.objects.filter(
+            category=self.wordset.category,
+            difficulty__lt=self.wordset.difficulty
+        )
+
+        for lower_difficulty_wordset in lower_difficulty_wordsets:
+            lower_difficulty_wordset_user_accuracy, created = WordSetUserAccuracy.objects.get_or_create(
+                user=self.user,
+                wordset=lower_difficulty_wordset
+            )
+            lower_difficulty_wordset_user_accuracy.save()
+
+        if WordSetUserAccuracy.objects.filter(
+                wordset__in=lower_difficulty_wordsets,
+                user=self.user,
+                accuracy__lt=0.7
+        ).exists():
+            return True
+
+        self.unlocked = True
+        return False
+
+    def save(self, *args, **kwargs):
+        self.accuracy = self.wordset.calculate_average_accuracy(self.user)
+        super().save(*args, **kwargs)
 
 
 class ScoreHistory(models.Model):
