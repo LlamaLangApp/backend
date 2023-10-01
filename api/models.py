@@ -85,6 +85,11 @@ class WordSet(models.Model):
         else:
             return 0.0
 
+    def are_all_words_revised_at_least_x_times(self, user, min_revisions=5):
+        translations = self.words.all()
+        user_accuracies = TranslationUserAccuracyCounter.objects.filter(translation__in=translations, user=user)
+        return user_accuracies.filter(good_answers_counter__gte=min_revisions).count() == translations.count()
+
 
 class WordSetUserAccuracy(models.Model):
     user = models.ForeignKey("CustomUser", on_delete=models.CASCADE)
@@ -96,7 +101,6 @@ class WordSetUserAccuracy(models.Model):
 
     @property
     def locked(self):
-        print("locked")
         if self.wordset.difficulty == 1 or self.unlocked:
             self.unlocked = True
             return False
@@ -107,6 +111,9 @@ class WordSetUserAccuracy(models.Model):
         )
 
         for lower_difficulty_wordset in lower_difficulty_wordsets:
+            if not lower_difficulty_wordset.are_all_words_revised_at_least_x_times(self.user):
+                return True
+
             lower_difficulty_wordset_user_accuracy, created = WordSetUserAccuracy.objects.get_or_create(
                 user=self.user,
                 wordset=lower_difficulty_wordset
