@@ -1,0 +1,37 @@
+services:
+  llamalang:
+    image: llamalang
+    build: ./
+    command: "/bin/sh /llamalang/run.sh"
+    environment:
+      IS_DEV: 1
+      SQL_DATABASE: llamalang_db
+      SQL_USER: postgres_user
+      SQL_PASSWORD: postgres_password
+      SQL_HOST: postgres_db
+      SQL_PORT: 5432
+    ports:
+      - "8000:8000"
+    volumes:
+      - media:/llamalang/media/user
+      # Hot reload
+      - ./backend:/llamalang/backend
+      - ./api:/llamalang/api
+      - ./media/defaults:/llamalang/media/defaults
+    depends_on:
+      - postgres_db
+
+  postgres_db:
+    image: postgres:15
+    expose:
+      - 5432
+    volumes:
+      - postgres_data:/var/lib/postgresql/data/
+    environment:
+      - POSTGRES_DB=llamalang_db
+      - POSTGRES_USER=postgres_user
+      - POSTGRES_PASSWORD=postgres_password
+
+volumes:
+  media:
+  postgres_data:
