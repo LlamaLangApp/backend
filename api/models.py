@@ -253,7 +253,7 @@ class GamePlayer(models.Model):
         return self.user.username
 
     def add_points(self, points_to_add=15):
-        self.score = F('score') + points_to_add
+        self.score += points_to_add
         self.save()
 
     def add_good_answer(self):
@@ -288,9 +288,9 @@ class RaceActiveGame(models.Model):
 
     def delete(self, *args, **kwargs):
         with transaction.atomic():
-            for player in self.players.all():
-                # player.user.add_score(player.score)
-                player.delete()
+            # for player in self.players.all():
+            #     # player.user.add_score(player.score)
+            #     player.delete()
             super(RaceActiveGame, self).delete(*args, **kwargs)
 
 
