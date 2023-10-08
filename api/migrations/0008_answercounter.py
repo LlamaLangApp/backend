@@ -13,7 +13,7 @@ class Migration(migrations.Migration):
 
     operations = [
         migrations.CreateModel(
-            name='AnswerCounter',
+            name='TranslationUserAccuracyCounter',
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
                 ('good_answers_counter', models.PositiveIntegerField(default=0)),

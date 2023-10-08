@@ -15,7 +15,7 @@ from api.consumers.messages import (
     GameFinalResultMessage
 )
 from api.consumers.waitlist_consumer import WaitListConsumer
-from api.models import RaceActiveGame, GamePlayer, RaceGameSession, AnswerCounter
+from api.models import RaceActiveGame, GamePlayer, RaceGameSession, TranslationUserAccuracyCounter
 
 
 class RaceConsumer(WaitListConsumer):
@@ -107,11 +107,12 @@ class RaceConsumer(WaitListConsumer):
         if round["answer"] == self.last_answer:
             points = 15
 
-            AnswerCounter.increment_good_answer(user=self.user, translation_id=round["answer_id"])
+            TranslationUserAccuracyCounter.increment_good_answer(user=self.user, translation_id=round["answer_id"])
 
             self.game_player.add_good_answer()
             self.game_player.add_points(points)
 
+        TranslationUserAccuracyCounter.increment_bad_answer(user=self.user, translation_id=round["answer_id"])
         self.game_player.refresh_from_db()
 
         return ResultMessage(correct=round["answer"], points=self.game_player.score).to_json()

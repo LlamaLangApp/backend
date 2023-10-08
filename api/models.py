@@ -3,9 +3,10 @@ from typing import List
 from django.db import models, transaction
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.contrib.auth.models import User, AbstractUser
-from django.db.models import F
+from django.db.models import F, Avg
 
 from backend import settings
+
 
 POINTS_PER_LEVEL = 100
 
@@ -19,39 +20,119 @@ class Translation(models.Model):
         return self.english
 
 
-class AnswerCounter(models.Model):
+class TranslationUserAccuracyCounter(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     translation = models.ForeignKey(Translation, on_delete=models.CASCADE)
     good_answers_counter = models.PositiveIntegerField(default=0)
+    bad_answers_counter = models.PositiveIntegerField(default=0)
+    accuracy = models.FloatField(default=0.0, validators=[MinValueValidator(0.0), MaxValueValidator(1.0)])
+
+    def calculate_accuracy(self):
+        if self.good_answers_counter + self.bad_answers_counter == 0:
+            self.accuracy = 0.0
+        else:
+            self.accuracy = round(self.good_answers_counter / (self.good_answers_counter + self.bad_answers_counter), 2)
 
     @classmethod
     def increment_good_answer(cls, user, translation_id):
         try:
             answer_counter = cls.objects.get(translation_id=translation_id, user=user)
             answer_counter.good_answers_counter += 1
+            answer_counter.calculate_accuracy()
             answer_counter.save()
         except cls.DoesNotExist:
-            cls.objects.create(translation_id=translation_id, user=user, good_answers_counter=1)
+            cls.objects.create(translation_id=translation_id, user=user, good_answers_counter=1, bad_answers_counter=0,
+                               accuracy=100.0)
 
     @classmethod
-    def decrement_good_answer(cls, user, translation_id):
+    def increment_bad_answer(cls, user, translation_id):
         try:
             answer_counter = cls.objects.get(translation_id=translation_id, user=user)
-            if answer_counter.good_answers_counter > 0:
-                answer_counter.good_answers_counter -= 1
+            answer_counter.bad_answers_counter += 1
+            answer_counter.calculate_accuracy()
             answer_counter.save()
         except cls.DoesNotExist:
-            cls.objects.create(translation_id=translation_id, user=user, good_answers_counter=0)
+            cls.objects.create(translation_id=translation_id, user=user, good_answers_counter=0, bad_answers_counter=1,
+                               accuracy=0.0)
+
+
+class WordSetCategory(models.TextChoices):
+    FOOD = "food", "Food"
+    ANIMALS = "animals", "Animals"
+    CLOTHES = "clothes", "Clothes"
+    HOUSE = "house", "House"
+    GENERAL = "general", "General"
+    VACATIONS = "vacations", "Vacations"
 
 
 class WordSet(models.Model):
     english = models.TextField()
     polish = models.TextField()
-
+    category = models.CharField(max_length=64, choices=WordSetCategory.choices, default="General")
+    difficulty = models.PositiveIntegerField(default=1)
     words = models.ManyToManyField(Translation)
 
     def __str__(self) -> str:
         return self.english
+
+    def calculate_average_accuracy(self, user):
+        translations = self.words.all()
+        user_accuracies = TranslationUserAccuracyCounter.objects.filter(translation__in=translations, user=user)
+        avg_accuracy = user_accuracies.aggregate(Avg("accuracy"))["accuracy__avg"]
+
+        if avg_accuracy is not None:
+            return round(avg_accuracy, 2)
+        else:
+            return 0.0
+
+    def are_all_words_revised_at_least_x_times(self, user, min_revisions=5):
+        translations = self.words.all()
+        user_accuracies = TranslationUserAccuracyCounter.objects.filter(translation__in=translations, user=user)
+        return user_accuracies.filter(good_answers_counter__gte=min_revisions).count() == translations.count()
+
+
+class WordSetUserAccuracy(models.Model):
+    user = models.ForeignKey("CustomUser", on_delete=models.CASCADE)
+    wordset = models.ForeignKey(WordSet, on_delete=models.CASCADE)
+    accuracy = models.FloatField(default=0.0, validators=[MinValueValidator(0.0), MaxValueValidator(1.0)])
+    unlocked = models.BooleanField(default=False)
+    class Meta:
+        unique_together = ('user', 'wordset')
+
+    @property
+    def locked(self):
+        if self.wordset.difficulty == 1 or self.unlocked:
+            self.unlocked = True
+            return False
+
+        lower_difficulty_wordsets = WordSet.objects.filter(
+            category=self.wordset.category,
+            difficulty__lt=self.wordset.difficulty
+        )
+
+        for lower_difficulty_wordset in lower_difficulty_wordsets:
+            if not lower_difficulty_wordset.are_all_words_revised_at_least_x_times(self.user):
+                return True
+
+            lower_difficulty_wordset_user_accuracy, created = WordSetUserAccuracy.objects.get_or_create(
+                user=self.user,
+                wordset=lower_difficulty_wordset
+            )
+            lower_difficulty_wordset_user_accuracy.save()
+
+        if WordSetUserAccuracy.objects.filter(
+                wordset__in=lower_difficulty_wordsets,
+                user=self.user,
+                accuracy__lt=0.7
+        ).exists():
+            return True
+
+        self.unlocked = True
+        return False
+
+    def save(self, *args, **kwargs):
+        self.accuracy = self.wordset.calculate_average_accuracy(self.user)
+        super().save(*args, **kwargs)
 
 
 class ScoreHistory(models.Model):
@@ -128,7 +209,7 @@ class RaceGameSession(BaseGameSession):
 
 
 class MultiplayerGames(models.TextChoices):
-    RACE = "RACE", "Race"
+    RACE = "race", "Race"
 
 
 class WaitingRoom(models.Model):
@@ -172,7 +253,7 @@ class GamePlayer(models.Model):
         return self.user.username
 
     def add_points(self, points_to_add=15):
-        self.score = F('score') + points_to_add
+        self.score += points_to_add
         self.save()
 
     def add_good_answer(self):
@@ -207,9 +288,9 @@ class RaceActiveGame(models.Model):
 
     def delete(self, *args, **kwargs):
         with transaction.atomic():
-            for player in self.players.all():
-                # player.user.add_score(player.score)
-                player.delete()
+            # for player in self.players.all():
+            #     # player.user.add_score(player.score)
+            #     player.delete()
             super(RaceActiveGame, self).delete(*args, **kwargs)
 
 

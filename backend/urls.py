@@ -21,6 +21,7 @@ from api import views
 
 
 router = routers.DefaultRouter()
+router.register("translation/answers", views.TranslationUserAccuracyCounterViewSet, basename="translation-answers")
 router.register("translation", views.TranslationViewSet, basename="translation")
 router.register("wordset", views.WordSetReadOnlySet, basename="wordset")
 router.register("memory-game", views.MemoryGameSessionViewSet, basename="memory-game")
@@ -31,7 +32,6 @@ router.register(
     "friend-request", views.FriendRequestViewSet, basename="friendship-request"
 )
 router.register("friendship", views.FriendshipViewSet, basename="friendship")
-router.register("answer-counter", views.AnswerCounterViewSet, basename="answer-counter")
 
 urlpatterns = [
     path("", include(router.urls)),

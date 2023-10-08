@@ -8,7 +8,7 @@ class Command(BaseCommand):
         Translation.objects.all().delete()
         WordSet.objects.all().delete()
 
-        food_set = WordSet(polish="żywność", english="food")
+        food_set = WordSet(polish="żywność", english="food", category="food", difficulty=1)
         food_set.save()
         food_set.words.create(polish="mleko", english="milk")
         food_set.words.create(polish="chleb", english="bread")
@@ -56,7 +56,7 @@ class Command(BaseCommand):
         family_set.words.create(polish="wnuk", english="grandson")
         family_set.save()
 
-        vacation_set = WordSet(polish="wakacje", english="vacations")
+        vacation_set = WordSet(polish="wakacje", english="vacations", category="vacations", difficulty=1)
         vacation_set.save()
         vacation_set.words.create(polish="plaża", english="beach")
         vacation_set.words.create(polish="morze", english="sea")
@@ -71,6 +71,18 @@ class Command(BaseCommand):
         vacation_set.words.create(polish="zwiedzanie", english="sightseeing")
         vacation_set.words.create(polish="krajobraz", english="landscape")
         vacation_set.save()
+
+        food_set2 = WordSet(polish="żywność 2", english="food 2", category="food", difficulty=2)
+        food_set2.save()
+        food_set2.words.create(polish="suflet", english="souffle")
+        food_set2.words.create(polish="kotlet", english="cutlet")
+        food_set2.words.create(polish="klops", english="meatball")
+        food_set2.words.create(polish="kotlet schabowy", english="pork chop")
+        food_set2.words.create(polish="ciasto francuskie", english="puff pastry")
+        food_set2.words.create(polish="pietruszka", english="parsley")
+        food_set2.words.create(polish="goździk", english="clove")
+        food_set2.words.create(polish="imbir", english="ginger")
+        food_set2.save()
 
         wordsets = WordSet.objects.all()
         translations = Translation.objects.all()
