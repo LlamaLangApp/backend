@@ -1,17 +1,19 @@
 # LlamaLang backend
 
-## Set-up
-
-### Installation
+## Running
 
 1. Clone the repository
-2. Create venv in root folder
+2. Run `docker compose up`
+
+### Dev setup
+
+1. Create venv in root folder
 
 ```commandline
 python -m venv venv
 ```
 
-3. Activate venv:
+2. Activate venv:
 
    For macOS:
 
@@ -25,10 +27,16 @@ python -m venv venv
     venv\Scripts\activate
    ```
 
-4. Install dependencies specified in requirements.txt
+3. Install dependencies specified in requirements.txt
 
 ```commandline
 pip install -r requirements.txt
+```
+
+4. Run the server
+
+```commandline
+python manage.py runserver
 ```
 
 If it doesn't work also try:
@@ -37,40 +45,16 @@ If it doesn't work also try:
 python manage.py runserver 0.0.0.0:8000
 ```
 
-5. Run the server
+## Development Notes
 
-```commandline
-python manage.py runserver
-```
+### Testing
 
-### Development Set-up
-
-1. Run migration to generate db schema:
-
-```commandline
-python manage.py migrate
-```
-
-2. Create user that you will use for manual tests purpose
-
-```commandline
-python manage.py create_user <username> <passsword>
-```
-
-3. Initiate test data in database:
-
-```commandline
-python manage.py init_word_sets
-```
-
-4. Login via `/auth/token/login/` endpoint with the credentials of previously created user. On success, the endpoint will return token needed to use API.
-   When making requests to API, put received token in Authentication header:
+Login via `/auth/token/login/` endpoint with the credentials of previously created user. On success, the endpoint will return token needed to use API.
+When making requests to API, put received token in Authentication header:
 
 ```
 Authentication: token <your_token>
 ```
-
-5. You are ready to develop!
 
 ### Regenerate open-api schema
 

@@ -9,4 +9,9 @@ class Command(BaseCommand):
         parser.add_argument("password", type=str)
 
     def handle(self, **options):
-        CustomUser.objects.create_user(options['username'], password=options['password'])
+        if CustomUser.objects.filter(username=options["username"]).exists():
+            print("Skipping creating user because it already exists")
+            return
+        CustomUser.objects.create_user(
+            options["username"], password=options["password"]
+        )

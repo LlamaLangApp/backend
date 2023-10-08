@@ -1,0 +1,6 @@
+db.sqlite3
+.github
+venv/
+.gitignore
+compose.yaml
+README.md
