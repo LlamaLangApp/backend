@@ -107,7 +107,7 @@ class WordSetReadOnlySet(viewsets.ReadOnlyModelViewSet):
         if limit:
             serialized_data['words'] = serialized_data['words'][:int(limit)]
 
-        return Response(serialized_data)
+        return Response(TranslationSerializer(serialized_data['words'], many=True).data)
 
 
 class BaseGameSessionViewSet(viewsets.ModelViewSet):
