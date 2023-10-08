@@ -76,12 +76,14 @@ class GameFinalResultMessage(WebSocketMessage):
 
     @classmethod
     def create_from_players(cls, players_with_scores):
+        tie = False
         if players_with_scores:
             highest_score_player = players_with_scores[0]
             winner_username = highest_score_player['user__username']
             winner_points = highest_score_player['score']
 
-            tie = winner_points == players_with_scores[1]['score']
+            if len(players_with_scores) > 0:
+                tie = winner_points == players_with_scores[1]['score']
 
         if tie:
             winner_username = None
