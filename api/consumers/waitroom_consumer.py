@@ -4,7 +4,7 @@ from channels.db import database_sync_to_async
 from channels.generic.websocket import AsyncWebsocketConsumer
 from api.consumers.helpers import SocketGameState
 from api.consumers.messages import JoinedWaitroomMessage, WaitroomRequestMessage
-from api.models import WaitingRoom
+from api.models import WaitingRoom, WordSet
 from django.contrib.auth import get_user_model
 
 User = get_user_model()
@@ -55,7 +55,7 @@ class WaitListConsumer(AsyncWebsocketConsumer):
         try:
             message = json.loads(text_data)
         except json.JSONDecodeError:
-            print("Message is not a valid json!")
+            self.send_error_message("Invalid message format")
 
         # TODO: security
         if self.__state == SocketGameState.JUST_CONNECTED:
@@ -66,13 +66,40 @@ class WaitListConsumer(AsyncWebsocketConsumer):
             await self.on_message(message)
 
     async def handle_just_connected(self, message):
-        message = WaitroomRequestMessage(game=message["game"])
+        game = message["game"]
+        wordset_id = message["wordset_id"]
 
-        await self.join_game_waitlist(message.game)
+        try:
+            wordset = await self.check_if_wordset_exists(wordset_id)
+        except ValueError:
+            await self.send_error_message("Wordset does not exist")
+            return
+
+        locked = await self.is_wordset_locked_for_user(wordset)
+
+        if locked:
+            await self.send_error_message("Wordset is locked for you")
+            return
+
+        message = WaitroomRequestMessage(game=game, wordset=wordset.english)
+
+        await self.join_game_waitroom(game, wordset)
         await self.try_init_game(message)
 
-    async def join_game_waitlist(self, game):
-        room_pk = await self.add_user_to_waitroom(game)
+    @database_sync_to_async
+    def check_if_wordset_exists(self, wordset_id):
+        try:
+            wordset = WordSet.objects.get(id=wordset_id)
+            return wordset
+        except WordSet.DoesNotExist:
+            raise ValueError("Wordset does not exist")
+
+    @database_sync_to_async
+    def is_wordset_locked_for_user(self, wordset):
+        return wordset.is_locked_for_user(self.user)
+
+    async def join_game_waitroom(self, game, wordset):
+        room_pk = await self.add_user_to_waitroom(game, wordset)
 
         self.__group_name = str(room_pk)
         await self.channel_layer.group_add(self.__group_name, self.channel_name)
@@ -153,15 +180,15 @@ class WaitListConsumer(AsyncWebsocketConsumer):
         self.room = None
 
     @database_sync_to_async
-    def add_user_to_waitroom(self, game):
-        self.get_waitroom(game)
+    def add_user_to_waitroom(self, game, wordset):
+        self.get_waitroom(game, wordset)
         self.room.add_user(self.user)
 
         return self.room.pk
 
-    def get_waitroom(self, game):
-        room, _ = WaitingRoom.objects.filter(game=game).get_or_create(game=game)
+    def get_waitroom(self, game, wordset):
+        room, _ = WaitingRoom.objects.filter(game=game, wordset=wordset).get_or_create(game=game, wordset=wordset)
         self.room = room
 
-
-
+    async def send_error_message(self, error_message):
+        await self.send(json.dumps({"error": error_message}))

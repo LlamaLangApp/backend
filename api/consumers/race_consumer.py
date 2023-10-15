@@ -14,7 +14,7 @@ from api.consumers.messages import (
     GameStartingMessage,
     GameFinalResultMessage
 )
-from api.consumers.waitlist_consumer import WaitListConsumer
+from api.consumers.waitroom_consumer import WaitListConsumer
 from api.models import RaceActiveGame, GamePlayer, RaceGameSession, TranslationUserAccuracyCounter
 
 

@@ -6,9 +6,7 @@ from django.contrib.auth.models import User, AbstractUser
 from django.db.models import F, Avg
 
 from backend import settings
-
-
-POINTS_PER_LEVEL = 100
+from backend.settings import POINTS_PER_LEVEL
 
 
 class Translation(models.Model):
@@ -90,6 +88,12 @@ class WordSet(models.Model):
         user_accuracies = TranslationUserAccuracyCounter.objects.filter(translation__in=translations, user=user)
         return user_accuracies.filter(good_answers_counter__gte=min_revisions).count() == translations.count()
 
+    def is_locked_for_user(self, user):
+        wordset_user_accuracy, _ = WordSetUserAccuracy.objects.get_or_create(user=user, wordset=self)
+        if wordset_user_accuracy:
+            return wordset_user_accuracy.locked
+        return True
+
 
 class WordSetUserAccuracy(models.Model):
     user = models.ForeignKey("CustomUser", on_delete=models.CASCADE)
@@ -150,6 +154,9 @@ class CustomUser(AbstractUser):
     def calculate_level(self):
         self.level = self.score // POINTS_PER_LEVEL + 1
         self.save()
+
+    def get_points_to_next_level(self):
+        return POINTS_PER_LEVEL * self.level - self.score
 
     def add_score(self, score, game_name):
         with transaction.atomic():
@@ -214,6 +221,7 @@ class MultiplayerGames(models.TextChoices):
 
 class WaitingRoom(models.Model):
     game = models.TextField(choices=MultiplayerGames.choices)
+    wordset = models.ForeignKey(WordSet, on_delete=models.CASCADE)
     users = models.ManyToManyField("CustomUser", blank=True)
     timestamp = models.DateTimeField(auto_now_add=True)
 
@@ -229,9 +237,9 @@ class WaitingRoom(models.Model):
         return self.users.count() == 2
 
     @classmethod
-    def get_waiting_room_by_game(cls, game):
+    def get_waiting_room_by_game_and_wordset(cls, game, wordset):
         try:
-            return cls.objects.get(game=game)
+            return cls.objects.get(game=game, wordset=wordset)
         except cls.DoesNotExist:
             return None
 

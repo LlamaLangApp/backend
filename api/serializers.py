@@ -30,7 +30,8 @@ class CustomUserSerializer(UserSerializer):
         read_only_fields = ('level', 'avatar')
         fields = ('id', 'username', 'level', 'avatar')
 
-    def get_avatar(self, obj):
+    @staticmethod
+    def get_avatar(obj):
         if obj.avatar:
             with open(obj.avatar.path, "rb") as image_file:
                 image_data = base64.b64encode(image_file.read()).decode("utf-8")
@@ -41,11 +42,12 @@ class CustomUserSerializer(UserSerializer):
 class MyProfileSerializer(serializers.ModelSerializer):
     avatar = serializers.SerializerMethodField()
     current_week_points = serializers.SerializerMethodField()
+    points_to_next_level = serializers.SerializerMethodField()
 
     class Meta:
         model = CustomUser
         read_only_fields = ('level', 'current_week_points', 'score')
-        fields = ('id', 'username', 'email', 'score', 'level', 'avatar', 'current_week_points')
+        fields = ('id', 'username', 'email', 'score', 'level', 'avatar', 'current_week_points', 'points_to_next_level')
 
     def get_current_week_points(self, obj):
         request = self.context.get('request')
@@ -58,6 +60,10 @@ class MyProfileSerializer(serializers.ModelSerializer):
 
             return current_week_points
         return 0
+
+    @staticmethod
+    def get_points_to_next_level(obj):
+        return obj.get_points_to_next_level()
 
     def get_avatar(self, obj):
         request = self.context.get('request')
@@ -97,10 +103,7 @@ class WordSetSerializer(serializers.ModelSerializer):
         request = self.context.get('request')
         user = request.user
 
-        wordset_user_accuracy, _ = WordSetUserAccuracy.objects.get_or_create(user=user, wordset=obj)
-        if wordset_user_accuracy:
-            return wordset_user_accuracy.locked
-        return True
+        return obj.is_locked_for_user(user)
 
 
 class WordSetWithTranslationSerializer(WordSetSerializer):
