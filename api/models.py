@@ -214,6 +214,7 @@ class MultiplayerGames(models.TextChoices):
 
 class WaitingRoom(models.Model):
     game = models.TextField(choices=MultiplayerGames.choices)
+    wordset = models.ForeignKey(WordSet, on_delete=models.CASCADE)
     users = models.ManyToManyField("CustomUser", blank=True)
     timestamp = models.DateTimeField(auto_now_add=True)
 
@@ -229,9 +230,9 @@ class WaitingRoom(models.Model):
         return self.users.count() == 2
 
     @classmethod
-    def get_waiting_room_by_game(cls, game):
+    def get_waiting_room_by_game_and_wordset(cls, game, wordset):
         try:
-            return cls.objects.get(game=game)
+            return cls.objects.get(game=game, wordset=wordset)
         except cls.DoesNotExist:
             return None
 

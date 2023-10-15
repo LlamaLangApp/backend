@@ -4,6 +4,7 @@ from enum import Enum
 from typing import List, Dict
 
 
+
 @dataclass
 class WebSocketMessage:
     def to_json(self):
@@ -19,6 +20,7 @@ class WaitroomMessageType(str, Enum):
 @dataclass
 class WaitroomRequestMessage(WebSocketMessage):
     game: str
+    wordset: str
     type: str = WaitroomMessageType.WAITROOM_REQUEST
 
 
