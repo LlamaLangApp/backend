@@ -6,9 +6,7 @@ from django.contrib.auth.models import User, AbstractUser
 from django.db.models import F, Avg
 
 from backend import settings
-
-
-POINTS_PER_LEVEL = 100
+from backend.settings import POINTS_PER_LEVEL
 
 
 class Translation(models.Model):
@@ -150,6 +148,9 @@ class CustomUser(AbstractUser):
     def calculate_level(self):
         self.level = self.score // POINTS_PER_LEVEL + 1
         self.save()
+
+    def get_points_to_next_level(self):
+        return POINTS_PER_LEVEL * self.level - self.score
 
     def add_score(self, score, game_name):
         with transaction.atomic():

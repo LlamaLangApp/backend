@@ -103,6 +103,8 @@ AUTH_PASSWORD_VALIDATORS = [
 MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
 
+POINTS_PER_LEVEL = 100
+
 DJOSER = {
     "SERIALIZERS": {
         "user_create": "api.serializers.CustomUserCreateSerializer",
