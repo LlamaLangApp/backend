@@ -5,8 +5,9 @@ from django.core.validators import MaxValueValidator, MinValueValidator
 from django.contrib.auth.models import User, AbstractUser
 from django.db.models import F, Avg
 
+from api.helpers import get_score_goal_for_level
 from backend import settings
-from backend.settings import POINTS_PER_LEVEL
+from backend.settings import POINTS_TO_2_LEVEL
 
 
 class Translation(models.Model):
@@ -152,11 +153,12 @@ class CustomUser(AbstractUser):
     avatar = models.ImageField(upload_to='avatars', null=True, blank=True, default='defaults/default_avatar.png')
 
     def calculate_level(self):
-        self.level = self.score // POINTS_PER_LEVEL + 1
+        if self.score >= get_score_goal_for_level(self.level + 1):
+            self.level = self.level + 1
         self.save()
 
     def get_points_to_next_level(self):
-        return POINTS_PER_LEVEL * self.level - self.score
+        return get_score_goal_for_level(self.level + 1) - self.score
 
     def add_score(self, score, game_name):
         with transaction.atomic():
