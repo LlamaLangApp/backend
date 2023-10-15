@@ -55,7 +55,7 @@ class WaitListConsumer(AsyncWebsocketConsumer):
         try:
             message = json.loads(text_data)
         except json.JSONDecodeError:
-            self.send({"error": "Invalid JSON"})
+            self.send_error_message("Invalid message format")
 
         # TODO: security
         if self.__state == SocketGameState.JUST_CONNECTED:
@@ -72,8 +72,14 @@ class WaitListConsumer(AsyncWebsocketConsumer):
         try:
             wordset = await self.check_if_wordset_exists(wordset_id)
         except ValueError:
-            await self.send({"error": "Wordset does not exist"})
-            await self.close()
+            await self.send_error_message("Wordset does not exist")
+            return
+
+        locked = await self.is_wordset_locked_for_user(wordset)
+
+        if locked:
+            await self.send_error_message("Wordset is locked for you")
+            return
 
         message = WaitroomRequestMessage(game=game, wordset=wordset.english)
 
@@ -88,8 +94,11 @@ class WaitListConsumer(AsyncWebsocketConsumer):
         except WordSet.DoesNotExist:
             raise ValueError("Wordset does not exist")
 
+    @database_sync_to_async
+    def is_wordset_locked_for_user(self, wordset):
+        return wordset.is_locked_for_user(self.user)
+
     async def join_game_waitroom(self, game, wordset):
-        print("Joining waitroom")
         room_pk = await self.add_user_to_waitroom(game, wordset)
 
         self.__group_name = str(room_pk)
@@ -181,5 +190,5 @@ class WaitListConsumer(AsyncWebsocketConsumer):
         room, _ = WaitingRoom.objects.filter(game=game, wordset=wordset).get_or_create(game=game, wordset=wordset)
         self.room = room
 
-
-
+    async def send_error_message(self, error_message):
+        await self.send(json.dumps({"error": error_message}))

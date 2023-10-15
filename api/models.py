@@ -88,6 +88,12 @@ class WordSet(models.Model):
         user_accuracies = TranslationUserAccuracyCounter.objects.filter(translation__in=translations, user=user)
         return user_accuracies.filter(good_answers_counter__gte=min_revisions).count() == translations.count()
 
+    def is_locked_for_user(self, user):
+        wordset_user_accuracy, _ = WordSetUserAccuracy.objects.get_or_create(user=user, wordset=self)
+        if wordset_user_accuracy:
+            return wordset_user_accuracy.locked
+        return True
+
 
 class WordSetUserAccuracy(models.Model):
     user = models.ForeignKey("CustomUser", on_delete=models.CASCADE)

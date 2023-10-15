@@ -103,10 +103,7 @@ class WordSetSerializer(serializers.ModelSerializer):
         request = self.context.get('request')
         user = request.user
 
-        wordset_user_accuracy, _ = WordSetUserAccuracy.objects.get_or_create(user=user, wordset=obj)
-        if wordset_user_accuracy:
-            return wordset_user_accuracy.locked
-        return True
+        return obj.is_locked_for_user(user)
 
 
 class WordSetWithTranslationSerializer(WordSetSerializer):
