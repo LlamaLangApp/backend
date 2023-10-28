@@ -1,12 +1,11 @@
 # serializers.py
 from django.db.models import Sum
-import base64
 from rest_framework import serializers
 
 from api.exceptions import LockedWordSetException
 from api.helpers import calculate_current_week_start
 from api.models import Translation, WordSet, MemoryGameSession, FallingWordsGameSession, CustomUser, ScoreHistory, \
-    Friendship, FriendRequest, TranslationUserAccuracyCounter, WordSetUserAccuracy
+    Friendship, FriendRequest, TranslationUserAccuracyCounter
 from djoser.serializers import UserCreateSerializer, UserSerializer
 
 
@@ -23,24 +22,13 @@ class TranslationUserAccuracyCounterSerializer(serializers.ModelSerializer):
 
 
 class CustomUserSerializer(UserSerializer):
-    avatar = serializers.SerializerMethodField()
-
     class Meta(UserSerializer.Meta):
         model = CustomUser
         read_only_fields = ('level', 'avatar')
         fields = ('id', 'username', 'level', 'avatar')
 
-    @staticmethod
-    def get_avatar(obj):
-        if obj.avatar:
-            with open(obj.avatar.path, "rb") as image_file:
-                image_data = base64.b64encode(image_file.read()).decode("utf-8")
-            return image_data
-        return None
-
 
 class MyProfileSerializer(serializers.ModelSerializer):
-    avatar = serializers.SerializerMethodField()
     current_week_points = serializers.SerializerMethodField()
     points_to_next_level = serializers.SerializerMethodField()
 
@@ -64,16 +52,6 @@ class MyProfileSerializer(serializers.ModelSerializer):
     @staticmethod
     def get_points_to_next_level(obj):
         return obj.get_points_to_next_level()
-
-    def get_avatar(self, obj):
-        request = self.context.get('request')
-        user = request.user
-
-        if user.avatar:
-            with open(user.avatar.path, "rb") as image_file:
-                image_data = base64.b64encode(image_file.read()).decode("utf-8")
-            return image_data
-        return None
 
 
 class TranslationSerializer(serializers.ModelSerializer):

@@ -1,7 +1,7 @@
 from pathlib import Path
 import os
 
-is_dev = os.environ.get("IS_DEV", 0) == 1
+is_dev = os.environ.get("IS_DEV", 0) == "1"
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -9,7 +9,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = (
     "django-insecure-5$z)v7nk!0y+!0f1=t3qwjn+u6y&byvc*o6z01lkf03=m&c9!j"
     if is_dev
-    else os.environ.get("IS_DEV")
+    else os.environ.get("SECRET_KEY")
 )
 DEBUG = is_dev
 
