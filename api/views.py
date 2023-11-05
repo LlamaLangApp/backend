@@ -1,6 +1,7 @@
 # views.py
 import json
 
+import uuid
 from django.core.files.storage import default_storage
 from rest_framework import generics
 from django.db import models
@@ -14,7 +15,7 @@ from api.serializers import (
     MemoryGameSessionSerializer, FallingWordsGameSessionSerializer, MyProfileSerializer, FriendRequestSerializer,
     FriendshipSerializer, TranslationUserAccuracyCounterSerializer, WordSetSerializer, WordSetWithTranslationSerializer
 )
-from api.models import Translation, WordSet, MemoryGameSession, FallingWordsGameSession, FriendRequest, \
+from api.models import CustomUser, Translation, WordSet, MemoryGameSession, FallingWordsGameSession, FriendRequest, \
     Friendship, TranslationUserAccuracyCounter
 from rest_framework import status
 from rest_framework.parsers import FileUploadParser
@@ -166,11 +167,16 @@ def uploadAvatar(request):
     file = request.FILES["file"]
     extension = file.name.split(".")[-1]
 
-    path = f"user/avatars/{request.user.pk}.{extension}"
+    path = f"user/avatars/{str(uuid.uuid4())}.{extension}"
 
     with default_storage.open(path, "wb+") as destination:
         for chunk in file.chunks():
             destination.write(chunk)
+
+    default_image_path = CustomUser._meta.get_field('avatar').get_default()
+    current_url = request.user.avatar.url.removeprefix('/media/')
+    if default_image_path != current_url:
+        default_storage.delete(current_url)
 
     request.user.avatar = path
     request.user.save()

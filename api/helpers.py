@@ -1,6 +1,5 @@
 from datetime import date, timedelta
 
-from api.models import WordSet
 from backend.settings import POINTS_TO_2_LEVEL
 
 
