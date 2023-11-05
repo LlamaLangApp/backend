@@ -2,7 +2,6 @@ services:
   llamalang:
     image: llamalang
     build: ./
-    command: "/bin/sh /llamalang/run.sh"
     environment:
       IS_DEV: 1
       SQL_DATABASE: llamalang_db

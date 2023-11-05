@@ -1,11 +1,12 @@
 # views.py
 import json
 
+from django.core.files.storage import default_storage
 from rest_framework import generics
 from django.db import models
 from django.http import HttpResponseBadRequest
 from rest_framework import viewsets, permissions
-from rest_framework.decorators import action, api_view, permission_classes
+from rest_framework.decorators import action, api_view, permission_classes, parser_classes
 from rest_framework.exceptions import ValidationError
 
 from api.serializers import (
@@ -16,7 +17,7 @@ from api.serializers import (
 from api.models import Translation, WordSet, MemoryGameSession, FallingWordsGameSession, FriendRequest, \
     Friendship, TranslationUserAccuracyCounter
 from rest_framework import status
-from rest_framework.parsers import MultiPartParser
+from rest_framework.parsers import FileUploadParser
 from rest_framework.response import Response
 from datetime import datetime, timezone, timedelta
 
@@ -158,27 +159,23 @@ class FallingWordsSessionViewSet(BaseGameSessionViewSet):
     permission_classes = [permissions.IsAuthenticated]
 
 
-class UpdateProfileView(generics.UpdateAPIView):
-    serializer_class = MyProfileSerializer
-    parser_classes = (MultiPartParser,)
-    permission_classes = [permissions.IsAuthenticated]
+@api_view(["POST"])
+@permission_classes((permissions.IsAuthenticated,))
+@parser_classes((FileUploadParser,))
+def uploadAvatar(request):
+    file = request.FILES["file"]
+    extension = file.name.split(".")[-1]
 
-    def put(self, request, *args, **kwargs):
-        instance = self.request.user
-        serializer = self.get_serializer(instance, data=request.data, partial=True)
+    path = f"user/avatars/{request.user.pk}.{extension}"
 
-        if serializer.is_valid():
-            avatar = request.data.get('avatar')
-            if avatar:
-                user_id = instance.id
-                new_avatar_name = f'user_{user_id}.jpg'
+    with default_storage.open(path, "wb+") as destination:
+        for chunk in file.chunks():
+            destination.write(chunk)
 
-                avatar.name = new_avatar_name
+    request.user.avatar = path
+    request.user.save()
 
-            serializer.save()
-            return Response(serializer.data, status=status.HTTP_200_OK)
-
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    return Response(status=status.HTTP_200_OK)
 
 
 @api_view(["POST"])

@@ -9,4 +9,4 @@ RUN pip install -r requirements.txt
 
 COPY . /llamalang/
 
-CMD ["./llamalang/run.sh"]
+CMD /bin/sh ./run.sh
