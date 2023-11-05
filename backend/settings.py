@@ -106,6 +106,7 @@ MEDIA_ROOT = BASE_DIR / "media"
 POINTS_TO_2_LEVEL = 100
 
 DJOSER = {
+    'HIDE_USERS': False,
     "SERIALIZERS": {
         "user_create": "api.serializers.CustomUserCreateSerializer",
         "user": "api.serializers.CustomUserSerializer",
