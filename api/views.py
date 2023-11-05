@@ -14,7 +14,7 @@ from api.serializers import (
     MemoryGameSessionSerializer, FallingWordsGameSessionSerializer, MyProfileSerializer, FriendRequestSerializer,
     FriendshipSerializer, TranslationUserAccuracyCounterSerializer, WordSetSerializer, WordSetWithTranslationSerializer
 )
-from api.models import Translation, WordSet, MemoryGameSession, FallingWordsGameSession, FriendRequest, \
+from api.models import RaceGameSession, Translation, WordSet, MemoryGameSession, FallingWordsGameSession, FriendRequest, \
     Friendship, TranslationUserAccuracyCounter
 from rest_framework import status
 from rest_framework.parsers import FileUploadParser
@@ -228,6 +228,38 @@ def get_statistics(request):
 
     return Response(data=list(result))
 
+@api_view(["POST"])
+@permission_classes((permissions.IsAuthenticated,))
+def get_user_statistics(request):
+    user = request.user
+    body = json.loads(request.body)
+    game, start, end = (
+        body["game"],
+        body["start"],
+        body["end"],
+    )
+
+    if not game or not start or not end:
+        return HttpResponseBadRequest(
+            "Body must contains 'game', 'start' and 'end'"
+        )
+
+    objects = None
+    if game == "memory":
+        objects = MemoryGameSession.objects
+    elif game == "race":
+        objects = RaceGameSession.object
+    elif game == "falling_words":
+        objects = FallingWordsGameSession.objects
+
+    if not objects:
+        return HttpResponseBadRequest("Unknown game")
+    
+    objects = objects.filter(user=user, timestamp__range=(start, end))
+    objects = objects.extra({'created_day':"date(timestamp)"})
+    results = objects.values('created_day').annotate(count=models.Count('id'))
+
+    return Response(data=list(results))
 
 class FriendRequestViewSet(viewsets.ModelViewSet):
     queryset = FriendRequest.objects.all()
