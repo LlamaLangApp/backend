@@ -267,6 +267,7 @@ def get_user_statistics(request):
 
     return Response(data=list(results))
 
+
 class FriendRequestViewSet(viewsets.ModelViewSet):
     queryset = FriendRequest.objects.all()
     serializer_class = FriendRequestSerializer

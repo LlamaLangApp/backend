@@ -25,7 +25,7 @@ class CustomUserSerializer(UserSerializer):
     class Meta(UserSerializer.Meta):
         model = CustomUser
         read_only_fields = ('level', 'avatar')
-        fields = ('id', 'username', 'level', 'avatar')
+        fields = ('id', 'username', 'level', 'avatar', 'llama')
 
 
 class MyProfileSerializer(serializers.ModelSerializer):
@@ -35,7 +35,7 @@ class MyProfileSerializer(serializers.ModelSerializer):
     class Meta:
         model = CustomUser
         read_only_fields = ('level', 'current_week_points', 'score')
-        fields = ('id', 'username', 'email', 'score', 'level', 'avatar', 'current_week_points', 'points_to_next_level')
+        fields = ('id', 'username', 'email', 'score', 'level', 'llama', 'avatar', 'current_week_points', 'points_to_next_level')
 
     def get_current_week_points(self, obj):
         request = self.context.get('request')

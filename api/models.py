@@ -151,6 +151,7 @@ class CustomUser(AbstractUser):
     score = models.PositiveIntegerField(default=0)
     level = models.PositiveIntegerField(blank=False, default=1)
     avatar = models.ImageField(upload_to='avatars', null=True, blank=True, default='defaults/default_avatar.png')
+    llama = models.PositiveIntegerField(default=0, validators=[MinValueValidator(0), MaxValueValidator(10)])
 
     def calculate_level(self):
         if self.score >= get_score_goal_for_level(self.level + 1):
