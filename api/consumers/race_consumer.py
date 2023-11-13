@@ -8,9 +8,9 @@ from django.core.exceptions import ObjectDoesNotExist
 
 from api.consumers.helpers import get_race_rounds, get_words_for_play, SocketGameState
 from api.consumers.messages import (
-    ResultMessage,
-    AnswerMessage,
-    NewQuestionMessage,
+    RaceRoundResultMessage,
+    RaceAnswerMessage,
+    RaceNewQuestionMessage,
     GameStartingMessage,
     GameFinalResultMessage
 )
@@ -43,7 +43,7 @@ class RaceConsumer(WaitListConsumer):
         await self.send(await self.create_question_message())
 
     async def on_message(self, message):
-        message = AnswerMessage(answer=message["answer"])
+        message = RaceAnswerMessage(answer=message["answer"])
 
         if await self.handle_answer(message):
             await self.group_send("event_end_round", {})
@@ -87,7 +87,7 @@ class RaceConsumer(WaitListConsumer):
         rounds = json.loads(self.race_active_game.rounds)
         if self.race_active_game.round_count < len(rounds):
             round = rounds[self.race_active_game.round_count]
-            return NewQuestionMessage(
+            return RaceNewQuestionMessage(
                 question=round["question"], answers=round["options"]
             ).to_json()
         else:
@@ -115,7 +115,7 @@ class RaceConsumer(WaitListConsumer):
         TranslationUserAccuracyCounter.increment_bad_answer(user=self.user, translation_id=round["answer_id"])
         self.game_player.refresh_from_db()
 
-        return ResultMessage(correct=round["answer"], points=self.game_player.score).to_json()
+        return RaceRoundResultMessage(correct=round["answer"], points=self.game_player.score).to_json()
 
     @database_sync_to_async
     def create_game_results_message(self):
@@ -124,7 +124,7 @@ class RaceConsumer(WaitListConsumer):
         return game_result_message.to_json()
 
     @database_sync_to_async
-    def handle_answer(self, message: AnswerMessage):
+    def handle_answer(self, message: RaceAnswerMessage):
         """Returns True if all players had answered already"""
         self.last_answer = message.answer
 
