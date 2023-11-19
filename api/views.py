@@ -273,13 +273,13 @@ class FriendRequestViewSet(viewsets.ModelViewSet):
     serializer_class = FriendRequestSerializer
     permission_classes = [permissions.IsAuthenticated]
 
-    @action(detail=True, methods=["get"])
+    @action(detail=False, methods=["get"])
     def received(self, request, *args, **kwargs):
         queryset = FriendRequest.objects.filter(receiver=self.request.user)
         serializer = self.get_serializer(queryset, many=True)
         return Response(serializer.data)
 
-    @action(detail=True, methods=["get"])
+    @action(detail=False, methods=["get"])
     def sent(self, request, *args, **kwargs):
         queryset = FriendRequest.objects.filter(sender=self.request.user)
         serializer = self.get_serializer(queryset, many=True)
