@@ -217,6 +217,13 @@ class RaceGameSession(BaseGameSession):
         super().__init__(*args, **kwargs)
         self.game_name = 'race'
 
+class FindingWordsGameSession(BaseGameSession):
+    opponents = models.ManyToManyField("CustomUser", related_name="finding_words_game_sessions", blank=True)
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.game_name = 'race'
+
 
 class MultiplayerGames(models.TextChoices):
     RACE = "race", "Race"
@@ -303,6 +310,33 @@ class RaceActiveGame(models.Model):
             #     # player.user.add_score(player.score)
             #     player.delete()
             super(RaceActiveGame, self).delete(*args, **kwargs)
+
+
+class FindingWordsActiveGame(models.Model):
+    players = models.ManyToManyField(GamePlayer, related_name='finding_Words_active_games', blank=True)
+    # Answers so far in the current round
+    answers_count = models.IntegerField(default=0)
+    round_count = models.IntegerField(default=0)
+    wordset = models.ForeignKey(WordSet, on_delete=models.DO_NOTHING, null=True)
+    # Contains an array of `FindingWordsRound` objects
+    rounds = models.JSONField()
+
+    def add_player_to_active_game(self, player):
+        self.players.add(player)
+        self.save()
+
+    def move_to_next_round(self):
+        self.answers_count = 0
+        self.round_count = F('round_count') + 1
+        self.save()
+
+    def record_answer(self):
+        self.answers_count = F('answers_count') + 1
+        self.save()
+
+    def delete(self, *args, **kwargs):
+        with transaction.atomic():
+            super(FindingWordsActiveGame, self).delete(*args, **kwargs)
 
 
 class FriendRequest(models.Model):

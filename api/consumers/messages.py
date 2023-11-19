@@ -15,6 +15,7 @@ class WaitroomMessageType(str, Enum):
     WAITROOM_REQUEST = "waitroom_request"
     JOINED_WAITROOM = "joined_waitroom"
     GAME_STARTING = "game_starting"
+    FINAL_RESULT = "final_result"
 
 
 @dataclass
@@ -35,46 +36,12 @@ class GameStartingMessage(WebSocketMessage):
     type: str = WaitroomMessageType.GAME_STARTING
 
 
-class RaceMessageType(str, Enum):
-    NEW_QUESTION = "new_question"
-    RESPONSE = "response"
-    RESULT = "result"
-    FINAL_RESULT = "final_result"
-
-
-@dataclass
-class NewQuestionMessage(WebSocketMessage):
-    question: str
-    answers: List[str]
-    type: str = RaceMessageType.NEW_QUESTION
-
-
-@dataclass
-class AnswerMessage(WebSocketMessage):
-    answer: str
-    type: str = RaceMessageType.RESPONSE
-
-
-@dataclass
-class ResultMessage(WebSocketMessage):
-    correct: str
-    points: int
-    type: str = RaceMessageType.RESULT
-
-
-@dataclass
-class GameResultMessage(WebSocketMessage):
-    winner: str
-    points: int
-    type: str = RaceMessageType.RESULT
-
-
 @dataclass
 class GameFinalResultMessage(WebSocketMessage):
     winner: str
     winner_points: int
     scoreboard: List[Dict[str, str]]
-    type: str = RaceMessageType.FINAL_RESULT
+    type: str = WaitroomMessageType.FINAL_RESULT
 
     @classmethod
     def create_from_players(cls, players_with_scores):
@@ -98,4 +65,52 @@ class GameFinalResultMessage(WebSocketMessage):
 
 
 
+class RaceMessageType(str, Enum):
+    NEW_QUESTION = "new_question"
+    RESPONSE = "response"
+    RESULT = "result"
+
+
+@dataclass
+class RaceNewQuestionMessage(WebSocketMessage):
+    question: str
+    answers: List[str]
+    type: str = RaceMessageType.NEW_QUESTION
+
+
+@dataclass
+class RaceAnswerMessage(WebSocketMessage):
+    answer: str
+    type: str = RaceMessageType.RESPONSE
+
+
+@dataclass
+class RaceRoundResultMessage(WebSocketMessage):
+    correct: str
+    points: int
+    type: str = RaceMessageType.RESULT
+
+class FindingWordsMessageType(str, Enum):
+    NEW_QUESTION = "new_question"
+    RESPONSE = "response"
+    RESULT = "result"
+
+
+@dataclass
+class FindingWordsNewQuestionMessage(WebSocketMessage):
+    letters: List[str]
+    type: str = FindingWordsMessageType.NEW_QUESTION
+
+
+@dataclass
+class FindingWordsAnswerMessage(WebSocketMessage):
+    answer: str
+    type: str = FindingWordsMessageType.RESPONSE
+
+
+@dataclass
+class FindingWordsRoundResultMessage(WebSocketMessage):
+    word: str
+    points: int
+    type: str = FindingWordsMessageType.RESULT
 
