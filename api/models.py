@@ -7,7 +7,6 @@ from django.db.models import F, Avg
 
 from api.helpers import get_score_goal_for_level
 from backend import settings
-from backend.settings import POINTS_TO_2_LEVEL
 
 
 class Translation(models.Model):
@@ -186,14 +185,13 @@ class BaseGameSession(models.Model):
         validators=[MinValueValidator(0.0), MaxValueValidator(1.0)]
     )
     timestamp = models.DateTimeField(auto_now_add=False)
-    game_name = models.CharField(max_length=20, choices=GAME_CHOICES, default='memory')  # Default to 'memory'
+    game_name = models.CharField(max_length=20, choices=GAME_CHOICES, default='memory')
 
     class Meta:
         abstract = True
 
     def save(self, *args, **kwargs):
         self.user.add_score(self.score, self.game_name)
-        #add timestamp
         self.timestamp = self.user.scorehistory_set.last().date
         super(BaseGameSession, self).save(*args, **kwargs)
 
@@ -306,9 +304,6 @@ class RaceActiveGame(models.Model):
 
     def delete(self, *args, **kwargs):
         with transaction.atomic():
-            # for player in self.players.all():
-            #     # player.user.add_score(player.score)
-            #     player.delete()
             super(RaceActiveGame, self).delete(*args, **kwargs)
 
 
