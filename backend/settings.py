@@ -141,7 +141,7 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 CHANNEL_LAYERS = {"default": {"BACKEND": "channels.layers.InMemoryChannelLayer"}}
 
 
-if not is_dev or True:
+if not is_dev:
     s3_settings = {
             "BACKEND": "storages.backends.s3.S3Storage",
             "OPTIONS": {
