@@ -173,7 +173,7 @@ class WaitListConsumer(AsyncWebsocketConsumer):
             self.room = None
             return True, players, wordset
 
-        return False, None
+        return False, None, None
 
     @database_sync_to_async
     def remove_user_from_waitroom(self):
