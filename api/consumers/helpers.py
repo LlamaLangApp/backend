@@ -33,6 +33,5 @@ def get_race_rounds(words) -> List[RaceRound]:
     return rounds
 
 
-def get_words_for_play():
-    word_set = WordSet.objects.order_by("?")[0]
-    return list(word_set.words.all().values("polish", "english", "id")), word_set
+def get_words_for_play(wordset):
+    return list(wordset.words.all().values("polish", "english", "id"))

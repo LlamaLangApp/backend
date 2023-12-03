@@ -30,8 +30,8 @@ class RaceConsumer(WaitListConsumer):
 
     # Virtual functions implementations
     @staticmethod
-    async def on_game_init(players):
-        return (await RaceConsumer.create_race_active_game(players)).pk
+    async def on_game_init(players, wordset):
+        return (await RaceConsumer.create_race_active_game(players, wordset)).pk
 
     async def on_start(self, session_id):
         await self.init_race_active_game(session_id)
@@ -66,8 +66,8 @@ class RaceConsumer(WaitListConsumer):
 
     @staticmethod
     @database_sync_to_async
-    def create_race_active_game(players):
-        words, wordset = get_words_for_play()
+    def create_race_active_game(players, wordset):
+        words = get_words_for_play(wordset)
         race_rounds = get_race_rounds(words)
         game_session = RaceActiveGame.objects.create(
             rounds=json.dumps([asdict(r) for r in race_rounds]),

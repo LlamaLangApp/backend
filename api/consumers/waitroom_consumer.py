@@ -112,10 +112,10 @@ class WaitListConsumer(AsyncWebsocketConsumer):
         If wait-room is full, init game and send start game events to players.
         """
 
-        is_full, players = await self.is_waitroom_full(message.game)
+        is_full, players, wordset = await self.is_waitroom_full(message.game)
 
         if is_full:
-            session_id = await self.on_game_init(players)
+            session_id = await self.on_game_init(players, wordset)
             await self.send_start_game_event(session_id)
 
     # Group events
@@ -145,7 +145,7 @@ class WaitListConsumer(AsyncWebsocketConsumer):
 
     # Virtual functions, implementation depends on game type
     @staticmethod
-    async def on_game_init(players: List[User]) -> int:
+    async def on_game_init(players: List[User], wordset) -> int:
         """Should return the pk of the game session"""
         raise NotImplementedError()
 
@@ -168,9 +168,10 @@ class WaitListConsumer(AsyncWebsocketConsumer):
         """
         if self.room.is_full():
             players = list(self.room.users.all())
+            wordset = self.room.wordset
             self.room.delete()
             self.room = None
-            return True, players
+            return True, players, wordset
 
         return False, None
 
