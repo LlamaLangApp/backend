@@ -9,6 +9,7 @@ from django.http import HttpResponseBadRequest
 from rest_framework import viewsets, permissions
 from rest_framework.decorators import action, api_view, permission_classes, parser_classes
 from rest_framework.exceptions import ValidationError
+from api.consumers.updates_consumer import FriendStatusUpdate, send_update
 
 from api.serializers import (
     TranslationSerializer,
@@ -286,23 +287,23 @@ class FriendRequestViewSet(viewsets.ModelViewSet):
         return Response(serializer.data)
 
     def perform_create(self, serializer):
-        if Friendship.objects.filter(user=self.request.user, friend=serializer.validated_data['receiver']).exists() \
-                and Friendship.objects.filter(user=serializer.validated_data['receiver'],
-                                              friend=self.request.user).exists():
+        user = self.request.user
+        receiver = serializer.validated_data['receiver']
+        if Friendship.objects.filter(user=user, friend=receiver).exists() \
+                and Friendship.objects.filter(user=receiver, friend=user).exists():
             raise ValidationError('You are already friends')
 
-        if FriendRequest.objects.filter(sender=self.request.user,
-                                        receiver=serializer.validated_data['receiver']).exists():
+        if FriendRequest.objects.filter(sender=user, receiver=receiver).exists():
             raise ValidationError('You have already sent a friend request to this user')
 
-        if FriendRequest.objects.filter(sender=serializer.validated_data['receiver'],
-                                        receiver=self.request.user).exists():
+        if FriendRequest.objects.filter(sender=receiver, receiver=user).exists():
             raise ValidationError('This user has already sent you a friend request')
 
-        if serializer.validated_data['receiver'] == self.request.user:
+        if receiver == user:
             raise ValidationError('You cannot send a friend request to yourself')
-
+        
         serializer.save(sender=self.request.user)
+        send_update(receiver, FriendStatusUpdate())
 
     @action(detail=True, methods=['patch'])
     def accept(self, request, pk=None):
@@ -311,8 +312,9 @@ class FriendRequestViewSet(viewsets.ModelViewSet):
 
         if friend_request.receiver.id == request.user.id:
             friendship_one_side = Friendship.objects.create(user=friend_request.sender, friend=friend_request.receiver)
-            friendship_second_side = Friendship.objects.create(user=friend_request.receiver, friend=friend_request.sender)
+            Friendship.objects.create(user=friend_request.receiver, friend=friend_request.sender)
             friend_request.delete()
+            send_update(friend_request.sender, FriendStatusUpdate())
             return Response({'detail': 'Friend request accepted.', 'friendship_id': friendship_one_side.pk }, status=status.HTTP_200_OK)
         else:
             return Response({'detail': 'You do not have permission to accept this request.'},
@@ -325,16 +327,19 @@ class FriendRequestViewSet(viewsets.ModelViewSet):
 
         if friend_request.receiver == request.user:
             friend_request.delete()
+            send_update(friend_request.sender, FriendStatusUpdate())
             return Response({'detail': 'Friend request rejected.'}, status=status.HTTP_200_OK)
         else:
             return Response({'detail': 'You do not have permission to reject this request.'},
                             status=status.HTTP_403_FORBIDDEN)
 
     def destroy(self, request, *args, **kwargs):
-        instance = self.get_object()
+        friend_request = self.get_object()
 
-        if instance.sender == request.user:  # Check if the requester is the creator
-            instance.delete()
+        # Check if the requester is the creator
+        if friend_request.sender == request.user:  
+            friend_request.delete()
+            send_update(friend_request.receiver, FriendStatusUpdate())
             return Response({'detail': 'Friend request deleted.'}, status=status.HTTP_204_NO_CONTENT)
         else:
             return Response({'detail': 'You do not have permission to delete this request.'},
