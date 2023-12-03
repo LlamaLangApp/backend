@@ -32,8 +32,8 @@ class FindingWordsConsumer(WaitListConsumer):
 
     # Virtual functions implementations
     @staticmethod
-    async def on_game_init(players):
-        active_game = await FindingWordsConsumer.create_active_game(players)
+    async def on_game_init(players, wordset):
+        active_game = await FindingWordsConsumer.create_active_game(players, wordset)
         return active_game.pk
 
     async def on_start(self, session_id):
@@ -69,8 +69,8 @@ class FindingWordsConsumer(WaitListConsumer):
 
     @staticmethod
     @database_sync_to_async
-    def create_active_game(players):
-        words, wordset = get_words_for_play()
+    def create_active_game(players, wordset):
+        words = get_words_for_play(wordset)
         rounds = get_rounds([word['english'] for word in words], 3)
         game_session = FindingWordsActiveGame.objects.create(
             rounds=json.dumps([asdict(r) for r in rounds]),
