@@ -310,10 +310,10 @@ class FriendRequestViewSet(viewsets.ModelViewSet):
         friend_request = self.get_object()
 
         if friend_request.receiver.id == request.user.id:
-            Friendship.objects.create(user=friend_request.sender, friend=friend_request.receiver)
-            Friendship.objects.create(user=friend_request.receiver, friend=friend_request.sender)
+            friendship_one_side = Friendship.objects.create(user=friend_request.sender, friend=friend_request.receiver)
+            friendship_second_side = Friendship.objects.create(user=friend_request.receiver, friend=friend_request.sender)
             friend_request.delete()
-            return Response({'detail': 'Friend request accepted.'}, status=status.HTTP_200_OK)
+            return Response({'detail': 'Friend request accepted.', 'friendship_id': friendship_one_side.pk }, status=status.HTTP_200_OK)
         else:
             return Response({'detail': 'You do not have permission to accept this request.'},
                             status=status.HTTP_403_FORBIDDEN)
