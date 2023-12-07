@@ -10,6 +10,7 @@ from rest_framework import viewsets, permissions
 from rest_framework.decorators import action, api_view, permission_classes, parser_classes
 from rest_framework.exceptions import ValidationError
 from api.consumers.updates_consumer import FriendStatusUpdate, send_update
+from api.helpers import calculate_current_week_start
 
 from api.serializers import (
     TranslationSerializer,
@@ -17,7 +18,7 @@ from api.serializers import (
     FriendshipSerializer, TranslationUserAccuracyCounterSerializer, WordSetSerializer, WordSetWithTranslationSerializer
 )
 from api.models import CustomUser, Translation, WordSet, MemoryGameSession, FallingWordsGameSession, FriendRequest, \
-    Friendship, TranslationUserAccuracyCounter, RaceGameSession
+    Friendship, TranslationUserAccuracyCounter, RaceGameSession, ScoreHistory
 from rest_framework import status
 from rest_framework.parsers import FileUploadParser
 from rest_framework.response import Response
@@ -186,54 +187,76 @@ def uploadAvatar(request):
 
 
 @api_view(["POST"])
-@permission_classes((permissions.IsAuthenticated,))
-def get_statistics(request):
+def get_scoreboard(request):
     body = json.loads(request.body)
-    game, period, statistic, aggregate = (
-        body["game"],
-        body["period"],
-        body["statistic"],
-        body["aggregate"],
-    )
+    period = body["period"]
+    aggregate = body.get("aggregate", "sum")
+    scoreboard_type = body.get("scoreboard_type", "global")  # Default to global if not provided
 
-    if not game or not period or not statistic:
+    if not period or not aggregate:
         return HttpResponseBadRequest(
-            "Body must contains 'game', 'period' and 'statistic'"
+            f"Body must contain 'period' and 'aggregate'. Body received: {body}"
         )
 
-    objects = None
-    if game == "memory":
-        objects = MemoryGameSession.objects
-
-    if not objects:
-        return HttpResponseBadRequest("Unknown game")
+    objects = ScoreHistory.objects
 
     if period == "all_time":
         pass
     elif period == "this_week":
-        current_time = datetime.utcnow()
-        start_of_week = current_time - timedelta(days=current_time.weekday())
-        end_of_week = start_of_week + timedelta(weeks=1)
-        objects = objects.filter(timestamp__range=(start_of_week, end_of_week))
+        start_of_the_week = calculate_current_week_start()
+        objects = objects.filter(timestamp__gte=start_of_the_week)
     else:
         return HttpResponseBadRequest("Unknown period")
 
     agg = None
     if aggregate == "sum":
-        # TODO: I think this is an sql injection
-        agg = models.Sum(statistic)
+        agg = models.Sum("score_gained", default=0)
     elif aggregate == "avg":
-        agg = models.Avg(statistic)
+        agg = models.Avg("score_gained", default=0)
     elif aggregate == "min":
-        agg = models.Min(statistic)
+        agg = models.Min("score_gained", default=0)
     elif aggregate == "count":
         agg = models.Count("id")
     else:
         return HttpResponseBadRequest("Unknown aggregate")
 
-    result = objects.values(username=models.F("user__username")).annotate(stat=agg)
+    user_result = None
+    if request.user.is_authenticated:
+        authenticated_user_stats = objects.filter(user=request.user).values(
+            username=models.F("user__username")
+        ).annotate(score=agg).order_by("-score").first()
+        user_result = authenticated_user_stats if authenticated_user_stats else {"username": request.user.username, "score": 0}
 
-    return Response(data=list(result))
+    if scoreboard_type == "global":
+        top_100_scores = (
+            objects.values(username=models.F("user__username"))
+            .annotate(score=agg)
+            .order_by("-score")[:100]
+        )
+    elif scoreboard_type == "friends":
+        friends = Friendship.objects.filter(user=request.user).values_list('friend', flat=True)
+        top_100_scores = (
+            objects.filter(user__in=friends)
+            .values(username=models.F("user__username"))
+            .annotate(score=agg)
+            .order_by("-score")[:100]
+        )
+    else:
+        return HttpResponseBadRequest("Unknown scoreboard type")
+
+    ranked_scores = []
+    current_place = 1
+    previous_score = None
+    for score in top_100_scores:
+        if previous_score is not None and score["score"] < previous_score["score"]:
+            current_place += 1
+        ranked_scores.append({"place": current_place, **score})
+        previous_score = score
+
+    result = list(ranked_scores)
+
+    return Response(data={"user": user_result, "top_100": result})
+
 
 @api_view(["POST"])
 @permission_classes((permissions.IsAuthenticated,))

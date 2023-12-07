@@ -37,7 +37,7 @@ router.register("friendship", views.FriendshipViewSet, basename="friendship")
 
 urlpatterns = [
     path("", include(router.urls)),
-    path("statistics/", views.get_statistics),
+    path("scoreboard/", views.get_scoreboard),
     path("user-statistics/", views.get_user_statistics),
     path("admin/", admin.site.urls),
     path("avatar-upload/", views.uploadAvatar, name="avatar-upload"),
