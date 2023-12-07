@@ -17,7 +17,7 @@ from channels.db import database_sync_to_async
 from django.core.asgi import get_asgi_application
 from django.urls import path
 
-from api.consumers import finding_words_consumer, race_consumer, updates_consumer
+from api.consumers import finding_words_consumer, race_consumer, updates_consumer, notification_consumer
 
 
 @database_sync_to_async
@@ -49,6 +49,7 @@ urlpatterns = [
     path("updates/", updates_consumer.UpdatesConsumer.as_asgi()),
     path("race/", race_consumer.RaceConsumer.as_asgi()),
     path("findingwords/", finding_words_consumer.FindingWordsConsumer.as_asgi()),
+    path("notifications/", notification_consumer.NotificationConsumer.as_asgi()),
 ]
 
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "backend.settings")

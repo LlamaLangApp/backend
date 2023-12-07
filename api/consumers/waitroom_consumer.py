@@ -50,7 +50,6 @@ class WaitListConsumer(AsyncWebsocketConsumer):
         self.__group_name = None
         self.user = None
 
-
     async def receive(self, text_data):
         try:
             message = json.loads(text_data)
