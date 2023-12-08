@@ -3,6 +3,8 @@ import json
 
 import uuid
 from django.core.files.storage import default_storage
+from django.db.models import Subquery, OuterRef
+from django.db.models.functions import Coalesce
 from rest_framework import generics
 from django.db import models
 from django.http import HttpResponseBadRequest
@@ -11,7 +13,7 @@ from rest_framework.decorators import action, api_view, permission_classes, pars
 from rest_framework.exceptions import ValidationError
 from api.consumers.updates_consumer import FriendStatusUpdate, send_update
 from api.helpers import calculate_current_week_start
-
+from django.db.models import OuterRef, Subquery, Sum, Value, IntegerField, F, ExpressionWrapper
 from api.serializers import (
     TranslationSerializer,
     MemoryGameSessionSerializer, FallingWordsGameSessionSerializer, MyProfileSerializer, FriendRequestSerializer,
@@ -103,7 +105,7 @@ class WordSetReadOnlySet(viewsets.ReadOnlyModelViewSet):
         if not wordset:
             return Response(status=status.HTTP_404_NOT_FOUND, data={'message': "Wordset not found."})
 
-        serialized_data = WordSetWithTranslationSerializer(wordset,  context={'request': request}).data
+        serialized_data = WordSetWithTranslationSerializer(wordset, context={'request': request}).data
 
         if serialized_data.get('locked'):
             return Response(status=status.HTTP_403_FORBIDDEN, data={'message': "Wordset is locked."})
@@ -185,17 +187,15 @@ def uploadAvatar(request):
 
     return Response(status=status.HTTP_200_OK)
 
-
-@api_view(["POST"])
+@api_view(['POST'])
 def get_scoreboard(request):
     body = json.loads(request.body)
     period = body["period"]
-    aggregate = body.get("aggregate", "sum")
     scoreboard_type = body.get("scoreboard_type", "global")  # Default to global if not provided
 
-    if not period or not aggregate:
+    if not period:
         return HttpResponseBadRequest(
-            f"Body must contain 'period' and 'aggregate'. Body received: {body}"
+            f"Body must contain 'period'. Body received: {body}"
         )
 
     objects = ScoreHistory.objects
@@ -208,38 +208,46 @@ def get_scoreboard(request):
     else:
         return HttpResponseBadRequest("Unknown period")
 
-    agg = None
-    if aggregate == "sum":
-        agg = models.Sum("score_gained", default=0)
-    elif aggregate == "avg":
-        agg = models.Avg("score_gained", default=0)
-    elif aggregate == "min":
-        agg = models.Min("score_gained", default=0)
-    elif aggregate == "count":
-        agg = models.Count("id")
-    else:
-        return HttpResponseBadRequest("Unknown aggregate")
+    agg = Sum("score_gained", default=0)
 
-    user_result = None
-    if request.user.is_authenticated:
-        authenticated_user_stats = objects.filter(user=request.user).values(
-            username=models.F("user__username")
-        ).annotate(score=agg).order_by("-score").first()
-        user_result = authenticated_user_stats if authenticated_user_stats else {"username": request.user.username, "score": 0}
-
+    all_scores = None
     if scoreboard_type == "global":
-        top_100_scores = (
-            objects.values(username=models.F("user__username"))
-            .annotate(score=agg)
-            .order_by("-score")[:100]
+        all_scores = (
+            CustomUser.objects
+            .annotate(
+                points=ExpressionWrapper(
+                    Coalesce(Subquery(
+                        ScoreHistory.objects
+                        .filter(user=OuterRef('pk'))
+                        .values('user')
+                        .annotate(score=agg)
+                        .values('score')
+                    ), Value(0)),
+                    output_field=IntegerField()
+                )
+            )
+            .values('username', 'points')
+            .order_by("-points")
         )
     elif scoreboard_type == "friends":
         friends = Friendship.objects.filter(user=request.user).values_list('friend', flat=True)
-        top_100_scores = (
-            objects.filter(user__in=friends)
-            .values(username=models.F("user__username"))
-            .annotate(score=agg)
-            .order_by("-score")[:100]
+        all_scores = (
+            CustomUser.objects
+            .filter(pk__in=friends)
+            .annotate(
+                points=ExpressionWrapper(
+                    Coalesce(Subquery(
+                        ScoreHistory.objects
+                        .filter(user=OuterRef('pk'))
+                        .values('user')
+                        .annotate(score=agg)
+                        .values('score')
+                    ), Value(0)),
+                    output_field=IntegerField()
+                )
+            )
+            .values('username', 'points')
+            .order_by("-points")
         )
     else:
         return HttpResponseBadRequest("Unknown scoreboard type")
@@ -247,16 +255,19 @@ def get_scoreboard(request):
     ranked_scores = []
     current_place = 1
     previous_score = None
-    for score in top_100_scores:
-        if previous_score is not None and score["score"] < previous_score["score"]:
+    for score in all_scores:
+        if previous_score is not None and score["points"] < previous_score["points"]:
             current_place += 1
         ranked_scores.append({"place": current_place, **score})
         previous_score = score
 
-    result = list(ranked_scores)
+    user_result = None
+    if request.user.is_authenticated:
+        user_result = next((score for score in ranked_scores if score["username"] == request.user.username), None)
 
-    return Response(data={"user": user_result, "top_100": result})
+    top_100_places = [ranked_score for ranked_score in ranked_scores if ranked_score["place"] <= 100]
 
+    return Response(data={"user": user_result, "top_100": top_100_places})
 
 @api_view(["POST"])
 @permission_classes((permissions.IsAuthenticated,))
@@ -284,9 +295,9 @@ def get_user_statistics(request):
 
     if not objects:
         return HttpResponseBadRequest("Unknown game")
-    
+
     objects = objects.filter(user=user, timestamp__range=(start, end))
-    objects = objects.extra({'created_day':"date(timestamp)"})
+    objects = objects.extra({'created_day': "date(timestamp)"})
     results = objects.values('created_day').annotate(count=models.Count('id'))
 
     return Response(data=list(results))
@@ -324,7 +335,7 @@ class FriendRequestViewSet(viewsets.ModelViewSet):
 
         if receiver == user:
             raise ValidationError('You cannot send a friend request to yourself')
-        
+
         serializer.save(sender=self.request.user)
         send_update(receiver, FriendStatusUpdate())
 
@@ -338,7 +349,8 @@ class FriendRequestViewSet(viewsets.ModelViewSet):
             Friendship.objects.create(user=friend_request.receiver, friend=friend_request.sender)
             friend_request.delete()
             send_update(friend_request.sender, FriendStatusUpdate())
-            return Response({'detail': 'Friend request accepted.', 'friendship_id': friendship_one_side.pk }, status=status.HTTP_200_OK)
+            return Response({'detail': 'Friend request accepted.', 'friendship_id': friendship_one_side.pk},
+                            status=status.HTTP_200_OK)
         else:
             return Response({'detail': 'You do not have permission to accept this request.'},
                             status=status.HTTP_403_FORBIDDEN)
@@ -360,7 +372,7 @@ class FriendRequestViewSet(viewsets.ModelViewSet):
         friend_request = self.get_object()
 
         # Check if the requester is the creator
-        if friend_request.sender == request.user:  
+        if friend_request.sender == request.user:
             friend_request.delete()
             send_update(friend_request.receiver, FriendStatusUpdate())
             return Response({'detail': 'Friend request deleted.'}, status=status.HTTP_204_NO_CONTENT)
@@ -419,5 +431,3 @@ class TranslationUserAccuracyCounterViewSet(viewsets.ModelViewSet):
         TranslationUserAccuracyCounter.increment_bad_answer(user=user, translation_id=translation_id)
 
         return Response({'message': 'Bad answer counter incremented successfully.'})
-
-
