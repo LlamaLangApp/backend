@@ -3,9 +3,7 @@ import json
 
 import uuid
 from django.core.files.storage import default_storage
-from django.db.models import Subquery, OuterRef
 from django.db.models.functions import Coalesce
-from rest_framework import generics
 from django.db import models
 from django.http import HttpResponseBadRequest
 from rest_framework import viewsets, permissions
@@ -13,18 +11,18 @@ from rest_framework.decorators import action, api_view, permission_classes, pars
 from rest_framework.exceptions import ValidationError
 from api.consumers.updates_consumer import FriendStatusUpdate, send_update
 from api.helpers import calculate_current_week_start
-from django.db.models import OuterRef, Subquery, Sum, Value, IntegerField, F, ExpressionWrapper
+from django.db.models import OuterRef, Subquery, Sum, Value, IntegerField, ExpressionWrapper
 from api.serializers import (
     TranslationSerializer,
-    MemoryGameSessionSerializer, FallingWordsGameSessionSerializer, MyProfileSerializer, FriendRequestSerializer,
-    FriendshipSerializer, TranslationUserAccuracyCounterSerializer, WordSetSerializer, WordSetWithTranslationSerializer
+    MemoryGameSessionSerializer, FallingWordsGameSessionSerializer, FriendRequestSerializer,
+    FriendshipSerializer, WordSetSerializer, WordSetWithTranslationSerializer
 )
 from api.models import CustomUser, Translation, WordSet, MemoryGameSession, FallingWordsGameSession, FriendRequest, \
-    Friendship, TranslationUserAccuracyCounter, RaceGameSession, ScoreHistory
+    Friendship, RaceGameSession, ScoreHistory
 from rest_framework import status
 from rest_framework.parsers import FileUploadParser
 from rest_framework.response import Response
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
 
 
 class TranslationViewSet(viewsets.ModelViewSet):
@@ -211,6 +209,7 @@ def get_scoreboard(request):
 
     agg = Sum("score_gained", default=0)
 
+    all_scores = None
     if scoreboard_type == "global":
         all_scores = (
             CustomUser.objects
@@ -268,7 +267,7 @@ def get_scoreboard(request):
         user_result = next((score for score in ranked_scores if score["username"] == request.user.username), None)
         if user_result is None and scoreboard_type == "friends":
             user_score = ScoreHistory.objects.filter(user=request.user).aggregate(score=agg)["score"]
-            user_place = len(ranked_scores) + 1 if previous_score["points"] and user_score < previous_score[
+            user_place = len(ranked_scores) + 1 if previous_score and user_score < previous_score[
                 "points"] else current_place
             user_result = {"place": user_place, "username": request.user.username, "points": user_score}
 
@@ -297,7 +296,7 @@ def get_user_statistics(request):
     if game == "memory":
         objects = MemoryGameSession.objects
     elif game == "race":
-        objects = RaceGameSession.object
+        objects = RaceGameSession.objects
     elif game == "falling_words":
         objects = FallingWordsGameSession.objects
 
@@ -419,25 +418,3 @@ class FriendshipViewSet(viewsets.ModelViewSet):
 
         return Response(serializer.data)
 
-
-class TranslationUserAccuracyCounterViewSet(viewsets.ModelViewSet):
-    queryset = TranslationUserAccuracyCounter.objects.all()
-    serializer_class = TranslationUserAccuracyCounterSerializer
-    permission_classes = [permissions.IsAuthenticated]
-    http_method_names = ['get', 'post']
-
-    @action(detail=False, methods=['POST'], url_path='good-answer')
-    def good_answer(self, request):
-        user = request.user
-        translation_id = request.data.get('translation')
-        TranslationUserAccuracyCounter.increment_good_answer(user=user, translation_id=translation_id)
-
-        return Response({'message': 'Good answer counter incremented successfully.'})
-
-    @action(detail=False, methods=['POST'], url_path='bad-answer')
-    def bad_answer(self, request):
-        user = request.user
-        translation_id = request.data.get('translation')
-        TranslationUserAccuracyCounter.increment_bad_answer(user=user, translation_id=translation_id)
-
-        return Response({'message': 'Bad answer counter incremented successfully.'})

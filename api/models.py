@@ -3,7 +3,7 @@ from typing import List
 from django.db import models, transaction
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.contrib.auth.models import User, AbstractUser
-from django.db.models import F, Avg
+from django.db.models import F
 
 from api.helpers import get_score_goal_for_level
 from backend import settings
@@ -16,42 +16,6 @@ class Translation(models.Model):
 
     def __str__(self) -> str:
         return self.english
-
-
-class TranslationUserAccuracyCounter(models.Model):
-    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
-    translation = models.ForeignKey(Translation, on_delete=models.CASCADE)
-    good_answers_counter = models.PositiveIntegerField(default=0)
-    bad_answers_counter = models.PositiveIntegerField(default=0)
-    accuracy = models.FloatField(default=0.0, validators=[MinValueValidator(0.0), MaxValueValidator(1.0)])
-
-    def calculate_accuracy(self):
-        if self.good_answers_counter + self.bad_answers_counter == 0:
-            self.accuracy = 0.0
-        else:
-            self.accuracy = round(self.good_answers_counter / (self.good_answers_counter + self.bad_answers_counter), 2)
-
-    @classmethod
-    def increment_good_answer(cls, user, translation_id):
-        try:
-            answer_counter = cls.objects.get(translation_id=translation_id, user=user)
-            answer_counter.good_answers_counter += 1
-            answer_counter.calculate_accuracy()
-            answer_counter.save()
-        except cls.DoesNotExist:
-            cls.objects.create(translation_id=translation_id, user=user, good_answers_counter=1, bad_answers_counter=0,
-                               accuracy=100.0)
-
-    @classmethod
-    def increment_bad_answer(cls, user, translation_id):
-        try:
-            answer_counter = cls.objects.get(translation_id=translation_id, user=user)
-            answer_counter.bad_answers_counter += 1
-            answer_counter.calculate_accuracy()
-            answer_counter.save()
-        except cls.DoesNotExist:
-            cls.objects.create(translation_id=translation_id, user=user, good_answers_counter=0, bad_answers_counter=1,
-                               accuracy=0.0)
 
 
 class WordSetCategory(models.TextChoices):
@@ -73,70 +37,53 @@ class WordSet(models.Model):
     def __str__(self) -> str:
         return self.english
 
-    def calculate_average_accuracy(self, user):
-        translations = self.words.all()
-        user_accuracies = TranslationUserAccuracyCounter.objects.filter(translation__in=translations, user=user)
-        avg_accuracy = user_accuracies.aggregate(Avg("accuracy"))["accuracy__avg"]
+    def get_easier_wordsets_from_category(self):
+        return list(WordSet.objects.filter(category=self.category, difficulty__lt=self.difficulty))
 
-        if avg_accuracy is not None:
-            return round(avg_accuracy, 2)
+    def get_accuracy_for_user(self, user):
+        # Query specific game session models
+        memory_sessions = MemoryGameSession.objects.filter(user=user, wordset=self)
+        falling_words_sessions = FallingWordsGameSession.objects.filter(user=user, wordset=self)
+        race_sessions = RaceGameSession.objects.filter(user=user, wordset=self)
+        finding_words_sessions = FindingWordsGameSession.objects.filter(user=user, wordset=self)
+
+        total_accuracy = 0.0
+        total_sessions = 0
+
+        for session in memory_sessions:
+            total_accuracy += session.accuracy
+            total_sessions += 1
+
+        for session in falling_words_sessions:
+            total_accuracy += session.accuracy
+            total_sessions += 1
+
+        for session in race_sessions:
+            total_accuracy += session.accuracy
+            total_sessions += 1
+
+        for session in finding_words_sessions:
+            total_accuracy += session.accuracy
+            total_sessions += 1
+
+        print('mmeory', list(memory_sessions.values_list('accuracy', flat=True)))
+        print(list(falling_words_sessions.values_list('accuracy', flat=True)))
+        print('race', list(race_sessions.values_list('accuracy', flat=True)))
+        print(list(finding_words_sessions.values_list('accuracy', flat=True)))
+
+        if total_sessions > 0:
+            average_accuracy = total_accuracy / total_sessions
+            return average_accuracy
         else:
-            return 0.0
-
-    def are_all_words_revised_at_least_x_times(self, user, min_revisions=5):
-        translations = self.words.all()
-        user_accuracies = TranslationUserAccuracyCounter.objects.filter(translation__in=translations, user=user)
-        return user_accuracies.filter(good_answers_counter__gte=min_revisions).count() == translations.count()
+            return -1.0  # If the user has never played, return -1.0
 
     def is_locked_for_user(self, user):
-        wordset_user_accuracy, _ = WordSetUserAccuracy.objects.get_or_create(user=user, wordset=self)
-        if wordset_user_accuracy:
-            return wordset_user_accuracy.locked
-        return True
-
-
-class WordSetUserAccuracy(models.Model):
-    user = models.ForeignKey("CustomUser", on_delete=models.CASCADE)
-    wordset = models.ForeignKey(WordSet, on_delete=models.CASCADE)
-    accuracy = models.FloatField(default=0.0, validators=[MinValueValidator(0.0), MaxValueValidator(1.0)])
-    unlocked = models.BooleanField(default=False)
-    class Meta:
-        unique_together = ('user', 'wordset')
-
-    @property
-    def locked(self):
-        if self.wordset.difficulty == 1 or self.unlocked:
-            self.unlocked = True
-            return False
-
-        lower_difficulty_wordsets = WordSet.objects.filter(
-            category=self.wordset.category,
-            difficulty__lt=self.wordset.difficulty
-        )
-
-        for lower_difficulty_wordset in lower_difficulty_wordsets:
-            if not lower_difficulty_wordset.are_all_words_revised_at_least_x_times(self.user):
+        # check if accuracies for all easier wordsets are at least 0.8
+        easier_wordsets = self.get_easier_wordsets_from_category()
+        for wordset in easier_wordsets:
+            if wordset.get_accuracy_for_user(user) < 0.8:
                 return True
-
-            lower_difficulty_wordset_user_accuracy, created = WordSetUserAccuracy.objects.get_or_create(
-                user=self.user,
-                wordset=lower_difficulty_wordset
-            )
-            lower_difficulty_wordset_user_accuracy.save()
-
-        if WordSetUserAccuracy.objects.filter(
-                wordset__in=lower_difficulty_wordsets,
-                user=self.user,
-                accuracy__lt=0.7
-        ).exists():
-            return True
-
-        self.unlocked = True
         return False
-
-    def save(self, *args, **kwargs):
-        self.accuracy = self.wordset.calculate_average_accuracy(self.user)
-        super().save(*args, **kwargs)
 
 
 class ScoreHistory(models.Model):
@@ -165,7 +112,7 @@ class CustomUser(AbstractUser):
             self.score = self.score + score
             self.save()
             self.calculate_level()
-
+            print(f"User {self.username} gained {score} points in {game_name} game")
             ScoreHistory.objects.create(user=self, score_gained=score, game_name=game_name)
 
 
@@ -174,6 +121,7 @@ class BaseGameSession(models.Model):
     GAME_CHOICES = [
         ('memory', 'Memory'),
         ('falling_words', 'Falling Words'),
+        ('finding_words', 'Finding Words'),
         ('race', 'Race'),
     ]
 
@@ -201,11 +149,17 @@ class MemoryGameSession(BaseGameSession):
         super().__init__(*args, **kwargs)
         self.game_name = 'memory'
 
+    def save(self, *args, **kwargs):
+        super(MemoryGameSession, self).save(*args, **kwargs)
+
 
 class FallingWordsGameSession(BaseGameSession):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.game_name = 'falling_words'
+
+    def save(self, *args, **kwargs):
+        super(FallingWordsGameSession, self).save(*args, **kwargs)
 
 
 class RaceGameSession(BaseGameSession):
@@ -215,12 +169,16 @@ class RaceGameSession(BaseGameSession):
         super().__init__(*args, **kwargs)
         self.game_name = 'race'
 
+
 class FindingWordsGameSession(BaseGameSession):
     opponents = models.ManyToManyField("CustomUser", related_name="finding_words_game_sessions", blank=True)
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.game_name = 'race'
+        self.game_name = 'finding_words'
+
+    def save(self, *args, **kwargs):
+        super(FindingWordsGameSession, self).save(*args, **kwargs)
 
 
 class MultiplayerGames(models.TextChoices):

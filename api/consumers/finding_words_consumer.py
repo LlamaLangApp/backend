@@ -17,7 +17,7 @@ from api.consumers.messages import (
     GameFinalResultMessage
 )
 from api.consumers.waitroom_consumer import WaitListConsumer
-from api.models import FindingWordsActiveGame, GamePlayer, FindingWordsGameSession, TranslationUserAccuracyCounter
+from api.models import FindingWordsActiveGame, GamePlayer, FindingWordsGameSession
 
 
 class FindingWordsConsumer(WaitListConsumer):
@@ -39,9 +39,9 @@ class FindingWordsConsumer(WaitListConsumer):
     async def on_start(self, session_id):
         await self.init_active_game(session_id)
         await self.send(await self.create_starting_message())
-        
+
         await asyncio.sleep(1)
-        
+
         self.start_game_timestamp = datetime.now()
         await self.send(await self.create_question_message())
 
@@ -110,12 +110,11 @@ class FindingWordsConsumer(WaitListConsumer):
 
         valid_answer = all([letter in round["letters"] for letter in self.last_answer])
         correct_answer = wordset.words.all().filter(english=self.last_answer).values("id").first()
-        
+
         player_won = valid_answer and correct_answer
 
         if player_won:
             points = get_points(self.last_position)
-            TranslationUserAccuracyCounter.increment_good_answer(user=self.user, translation_id=correct_answer["id"])
 
             self.player.add_good_answer()
             self.player.add_points(points)
@@ -179,6 +178,7 @@ class FindingWordsRound:
     letters: List[str]
     answer: str
 
+
 def get_rounds(words: List[str], round_count: int) -> List[FindingWordsRound]:
     LETTER_COUNT = 8
     ADD_ADDITIONAL_LETTERS = False
@@ -202,6 +202,7 @@ def get_rounds(words: List[str], round_count: int) -> List[FindingWordsRound]:
         rounds.append(FindingWordsRound(letters, word))
 
     return rounds
+
 
 def get_points(position: int):
     POINTS_PER_POSITION = [25, 20, 15, 10, 5]

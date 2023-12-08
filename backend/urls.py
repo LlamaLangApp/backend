@@ -23,7 +23,6 @@ from api import views
 
 
 router = routers.DefaultRouter()
-router.register("translation/answers", views.TranslationUserAccuracyCounterViewSet, basename="translation-answers")
 router.register("translation", views.TranslationViewSet, basename="translation")
 router.register("wordset", views.WordSetReadOnlySet, basename="wordset")
 router.register("memory-game", views.MemoryGameSessionViewSet, basename="memory-game")

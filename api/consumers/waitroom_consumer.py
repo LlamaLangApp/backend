@@ -193,3 +193,5 @@ class WaitListConsumer(AsyncWebsocketConsumer):
 
     async def send_error_message(self, error_message):
         await self.send(json.dumps({"error": error_message}))
+        # close
+        await self.disconnect(1000)
