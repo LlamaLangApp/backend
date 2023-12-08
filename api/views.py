@@ -332,8 +332,8 @@ def get_calendar_stats(request):
 @permission_classes((permissions.IsAuthenticated,))
 def get_longest_streak(request):
     user = request.user
-    body = json.loads(request.body)
-    game = body.get("game")
+    body = json.loads(request.body) if request.body else {}
+    game = body.get("game", None)
 
     # Set the date range to the last year
     end_date = datetime.today()
