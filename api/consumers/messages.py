@@ -1,40 +1,69 @@
 import json
 from dataclasses import dataclass, asdict
 from enum import Enum
-from typing import List, Dict
-
-
+from typing import List, Dict, Optional
 
 @dataclass
 class WebSocketMessage:
     def to_json(self):
         return json.dumps(asdict(self))
+    
+    @classmethod
+    def from_json(cls, text: str):
+        return cls(**json.loads(text))
 
 
 class WaitroomMessageType(str, Enum):
     WAITROOM_REQUEST = "waitroom_request"
     JOINED_WAITROOM = "joined_waitroom"
+    PLAYER_JOINED = "player_joined"
+    PLAYER_LEFT = "player_left"
+    PLAYER_INVITATION = "player_invitation"
+    START_GAME = "start_game"
+    WAITROOM_CANCELED = "waitroom_canceled"
     GAME_STARTING = "game_starting"
     FINAL_RESULT = "final_result"
 
 
 @dataclass
 class WaitroomRequestMessage(WebSocketMessage):
-    game: str
-    wordset: str
+    wordset_id: Optional[str] = None
+    as_owner: Optional[bool] = None
+    owned_room: Optional[str] = None
     type: str = WaitroomMessageType.WAITROOM_REQUEST
-
 
 @dataclass
 class JoinedWaitroomMessage(WebSocketMessage):
+    usernames: List[str]
+    waitroom: str
     type: str = WaitroomMessageType.JOINED_WAITROOM
 
+@dataclass
+class PlayerJoinedMessage(WebSocketMessage):
+    username: str
+    type: str = WaitroomMessageType.PLAYER_JOINED
+
+@dataclass
+class PlayerLeftMessage(WebSocketMessage):
+    username: str
+    type: str = WaitroomMessageType.PLAYER_LEFT
+
+@dataclass
+class PlayerInvitationMessage(WebSocketMessage):
+    user_id: str
+    type: str = WaitroomMessageType.PLAYER_INVITATION
+
+@dataclass
+class StartGameMessage(WebSocketMessage):
+    type: str = WaitroomMessageType.START_GAME
+
+@dataclass
+class WaitroomCanceledMessage(WebSocketMessage):
+    type: str = WaitroomMessageType.WAITROOM_CANCELED
 
 @dataclass
 class GameStartingMessage(WebSocketMessage):
-    players: List[str]
     type: str = WaitroomMessageType.GAME_STARTING
-
 
 @dataclass
 class GameFinalResultMessage(WebSocketMessage):
@@ -75,12 +104,14 @@ class RaceMessageType(str, Enum):
 class RaceNewQuestionMessage(WebSocketMessage):
     question: str
     answers: List[str]
+    timeout: int
     type: str = RaceMessageType.NEW_QUESTION
 
 
 @dataclass
 class RaceAnswerMessage(WebSocketMessage):
     answer: str
+    round: int
     type: str = RaceMessageType.RESPONSE
 
 
@@ -99,12 +130,15 @@ class FindingWordsMessageType(str, Enum):
 @dataclass
 class FindingWordsNewQuestionMessage(WebSocketMessage):
     letters: List[str]
+    timeout: int
+    round: int
     type: str = FindingWordsMessageType.NEW_QUESTION
 
 
 @dataclass
 class FindingWordsAnswerMessage(WebSocketMessage):
     answer: str
+    round: int
     type: str = FindingWordsMessageType.RESPONSE
 
 

@@ -1,10 +1,11 @@
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
+import json
 from typing import List
 from django.db import models, transaction
 from django.core.validators import MaxValueValidator, MinValueValidator
-from django.contrib.auth.models import User, AbstractUser
+from django.contrib.auth.models import AbstractUser
 from django.db.models import F, Avg
-
+from api.consumers.helpers import FindingWordsRound, get_finding_words_rounds, get_race_rounds, get_words_for_play
 from api.helpers import get_score_goal_for_level
 from backend import settings
 
@@ -224,41 +225,23 @@ class FindingWordsGameSession(BaseGameSession):
 
 
 class MultiplayerGames(models.TextChoices):
-    RACE = "race", "Race"
+    RACE = "race"
+    FINDING_WORDS = "findingwords"
 
 
 class WaitingRoom(models.Model):
     game = models.TextField(choices=MultiplayerGames.choices)
     wordset = models.ForeignKey(WordSet, on_delete=models.CASCADE)
-    users = models.ManyToManyField("CustomUser", blank=True)
+    users = models.ManyToManyField("CustomUser", related_name="in_waiting_room", blank=True)
+    owner = models.ForeignKey("Customuser", null=True, related_name="owns_waiting_room", on_delete=models.CASCADE)
     timestamp = models.DateTimeField(auto_now_add=True)
-
-    def add_user(self, user):
-        self.users.add(user)
-        self.save()
-
-    def remove_user(self, user):
-        self.users.remove(user)
-        self.save()
-
-    def is_full(self):
-        return self.users.count() == 2
-
+    
     @classmethod
     def get_waiting_room_by_game_and_wordset(cls, game, wordset):
         try:
             return cls.objects.get(game=game, wordset=wordset)
         except cls.DoesNotExist:
             return None
-
-
-@dataclass
-class RaceRound:
-    options: List[str]
-    answer: str
-    answer_id: int
-    question: str
-
 
 class GamePlayer(models.Model):
     score = models.IntegerField(default=0)
@@ -276,63 +259,82 @@ class GamePlayer(models.Model):
         self.good_answers = F('good_answers') + 1
         self.save()
 
-
-class RaceActiveGame(models.Model):
-    players = models.ManyToManyField(GamePlayer, related_name='race_active_games', blank=True)
-    answers_count = models.IntegerField(default=0)
-    round_count = models.IntegerField(default=0)
+class ActiveMultiplayerGame(models.Model):
     wordset = models.ForeignKey(WordSet, on_delete=models.DO_NOTHING, null=True)
     timestamp = models.DateTimeField(auto_now_add=True)
+    players = models.ManyToManyField(GamePlayer, related_name='active_games', blank=True)
+    required_answers = models.IntegerField()
+    answers_in_current_round = models.IntegerField(default=0)
+    round_count = models.IntegerField(default=0)
+    total_round_count = models.IntegerField()
+
+    def add_player(self, player: CustomUser):
+        self.players.add(player)
+        self.save()
+
+    def mark_player_answer(self):
+        self.refresh_from_db()
+        self.answers_in_current_round = F('answers_in_current_round') + 1
+        self.save()
+
+    def have_all_players_answered(self) -> int:
+        self.refresh_from_db()
+        return self.answers_in_current_round == self.required_answers
+
+    def progress_round(self):
+        self.round_count = F('round_count') + 1
+        self.answers_in_current_round = 0
+        self.save()
+    
+    def all_rounds_played(self) -> bool:
+        self.refresh_from_db()
+        return self.round_count >= self.total_round_count
+
+
+class RaceActiveGame(ActiveMultiplayerGame):
     # Contains an array of `RaceRound` objects
     rounds = models.JSONField()
 
-    def add_player_to_active_game(self, player):
-        self.players.add(player)
-        self.save()
+    @staticmethod
+    def create_session_from_waiting_room(waitroom: WaitingRoom) -> "RaceActiveGame":
+        words = get_words_for_play(waitroom.wordset)
+        race_rounds = get_race_rounds(words)
+        game_session = RaceActiveGame.objects.create(
+            rounds=json.dumps([asdict(r) for r in race_rounds]),
+            required_answers=waitroom.users.count(),
+            wordset=waitroom.wordset,
+            total_round_count=len(race_rounds),
+        )
+        for player in waitroom.users.all():
+            game_session.players.create(user=player)
+        game_session.save()
+        return game_session
 
-    def add_round(self):
-        self.round_count = F('round_count') + 1
-        self.save()
-
-    def add_answer(self):
-        self.answers_count = F('answers_count') + 1
-        self.save()
-
-    def reset_answers_count(self):
-        self.answers_count = 0
-        self.save()
-
-    def delete(self, *args, **kwargs):
-        with transaction.atomic():
-            super(RaceActiveGame, self).delete(*args, **kwargs)
-
-
-class FindingWordsActiveGame(models.Model):
-    players = models.ManyToManyField(GamePlayer, related_name='finding_Words_active_games', blank=True)
-    # Answers so far in the current round
-    answers_count = models.IntegerField(default=0)
-    round_count = models.IntegerField(default=0)
-    wordset = models.ForeignKey(WordSet, on_delete=models.DO_NOTHING, null=True)
+class FindingWordsActiveGame(ActiveMultiplayerGame):
     # Contains an array of `FindingWordsRound` objects
     rounds = models.JSONField()
 
-    def add_player_to_active_game(self, player):
-        self.players.add(player)
-        self.save()
+    @staticmethod
+    def create_session_from_waiting_room(waitroom: WaitingRoom) -> "FindingWordsActiveGame":
+        words = get_words_for_play(waitroom.wordset)
+        rounds = get_finding_words_rounds([word['english'] for word in words], 3)
+        game_session = FindingWordsActiveGame.objects.create(
+            rounds=json.dumps([asdict(r) for r in rounds]),
+            required_answers=waitroom.users.count(),
+            wordset=waitroom.wordset,
+            total_round_count=len(rounds),
+        )
+        for player in waitroom.users.all():
+            game_session.players.create(user=player)
+        game_session.save()
+        return game_session
+    
+    def is_answer_valid_for_round(self, answer: str, round: int) -> bool:
+        round: FindingWordsRound = json.loads(self.rounds)[round]
 
-    def move_to_next_round(self):
-        self.answers_count = 0
-        self.round_count = F('round_count') + 1
-        self.save()
-
-    def record_answer(self):
-        self.answers_count = F('answers_count') + 1
-        self.save()
-
-    def delete(self, *args, **kwargs):
-        with transaction.atomic():
-            super(FindingWordsActiveGame, self).delete(*args, **kwargs)
-
+        valid_answer = answer and all([letter in round["letters"] for letter in answer])
+        correct_answer = self.wordset.words.all().filter(english=answer).values("id").first()
+        return valid_answer and correct_answer
 
 class FriendRequest(models.Model):
     sender = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='sent_friend_requests')

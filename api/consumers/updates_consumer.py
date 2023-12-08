@@ -1,5 +1,6 @@
 from dataclasses import asdict, dataclass
 import json
+from typing import Union
 from channels.generic.websocket import AsyncWebsocketConsumer
 from asgiref.sync import async_to_sync
 from django.contrib.auth.models import AbstractUser
@@ -24,15 +25,14 @@ class UpdatesConsumer(AsyncWebsocketConsumer):
     
 
 def group_name_for_user(user: AbstractUser):
-    return str(user.pk)
+    return "UpdatesConsumer" + str(user.pk)
 
-async def _send_update_async(user: AbstractUser, payload: any):
+async def send_update_async(user: Union[AbstractUser, str], payload: any):
     """Payload must be a dataclass"""
     channel_layer = get_channel_layer()
-    print(asdict(payload))
     payload_str = json.dumps(asdict(payload))
     await channel_layer.group_send(
-        group_name_for_user(user),
+        ("UpdatesConsumer" + user) if isinstance(user, str) else group_name_for_user(user),
         {"type": "update", "payload": payload_str},
     )
 
@@ -40,5 +40,11 @@ async def _send_update_async(user: AbstractUser, payload: any):
 class FriendStatusUpdate:
     type: str = "friend_status_update"
 
-def send_update(user: AbstractUser, payload: any):
-    async_to_sync(_send_update_async)(user, payload)
+@dataclass
+class WaitroomInvitation:
+    game: str
+    waitroom: str
+    type: str = "waitroom_invitation"
+
+def send_update(user: Union[AbstractUser, str], payload: any):
+    async_to_sync(send_update_async)(user, payload)
