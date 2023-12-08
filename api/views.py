@@ -204,7 +204,7 @@ def get_scoreboard(request):
         pass
     elif period == "this_week":
         start_of_the_week = calculate_current_week_start()
-        objects = objects.filter(timestamp__gte=start_of_the_week)
+        objects = objects.filter(date__gte=start_of_the_week)
     else:
         return HttpResponseBadRequest("Unknown period")
 
