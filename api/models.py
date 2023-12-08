@@ -38,7 +38,8 @@ class WordSet(models.Model):
         return self.english
 
     def get_easier_wordsets_from_category(self):
-        return list(WordSet.objects.filter(category=self.category, difficulty__lt=self.difficulty))
+        wordsets = WordSet.objects.filter(category=self.category, difficulty__lt=self.difficulty)
+        return list(wordsets)
 
     def get_accuracy_for_user(self, user):
         # Query specific game session models
@@ -66,11 +67,6 @@ class WordSet(models.Model):
             total_accuracy += session.accuracy
             total_sessions += 1
 
-        print('mmeory', list(memory_sessions.values_list('accuracy', flat=True)))
-        print(list(falling_words_sessions.values_list('accuracy', flat=True)))
-        print('race', list(race_sessions.values_list('accuracy', flat=True)))
-        print(list(finding_words_sessions.values_list('accuracy', flat=True)))
-
         if total_sessions > 0:
             average_accuracy = total_accuracy / total_sessions
             return average_accuracy
@@ -79,7 +75,7 @@ class WordSet(models.Model):
 
     def is_locked_for_user(self, user):
         # check if accuracies for all easier wordsets are at least 0.8
-        easier_wordsets = self.get_easier_wordsets_from_category()
+        easier_wordsets = list(self.get_easier_wordsets_from_category())
         for wordset in easier_wordsets:
             if wordset.get_accuracy_for_user(user) < 0.8:
                 return True
