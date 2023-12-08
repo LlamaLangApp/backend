@@ -18,11 +18,11 @@ from api.serializers import (
     FriendshipSerializer, WordSetSerializer, WordSetWithTranslationSerializer
 )
 from api.models import CustomUser, Translation, WordSet, MemoryGameSession, FallingWordsGameSession, FriendRequest, \
-    Friendship, RaceGameSession, ScoreHistory
+    Friendship, RaceGameSession, ScoreHistory, FindingWordsGameSession
 from rest_framework import status
 from rest_framework.parsers import FileUploadParser
 from rest_framework.response import Response
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 
 class TranslationViewSet(viewsets.ModelViewSet):
@@ -276,40 +276,58 @@ def get_scoreboard(request):
     return Response(data={"user": user_result, "top_100": top_100_places})
 
 
+
 @api_view(["POST"])
 @permission_classes((permissions.IsAuthenticated,))
-def get_user_statistics(request):
+def get_calendar_stats(request):
     user = request.user
     body = json.loads(request.body)
-    game, start, end = (
-        body["game"],
-        body["start"],
-        body["end"],
-    )
+    game, month, year = body.get("game"), body.get("month"), body.get("year")
 
-    if not game or not start or not end:
-        return HttpResponseBadRequest(
-            "Body must contains 'game', 'start' and 'end'"
-        )
+    if month is None:
+        today = datetime.today()
+        month = today.month
+        year = today.year
 
-    objects = None
-    if game == "memory":
-        objects = MemoryGameSession.objects
-    elif game == "race":
-        objects = RaceGameSession.objects
-    elif game == "falling_words":
-        objects = FallingWordsGameSession.objects
+    start_date = datetime(year, month, 1)
+    end_date = start_date.replace(day=1, month=start_date.month % 12 + 1, year=start_date.year + start_date.month // 12) - timedelta(days=1)
 
-    if not objects:
-        return HttpResponseBadRequest("Unknown game")
+    game_sessions = None
 
-    objects = objects.filter(user=user, timestamp__range=(start, end))
-    objects = objects.extra({'created_day': "date(timestamp)"})
-    results = objects.values('created_day').annotate(count=models.Count('id'))
-    # kalendarz, streak
-    # najczeciej grana gra
-    # najdluzszy streak
-    return Response(data=list(results))
+    if game is not None:
+        # Filter by the specified game
+        model_map = {
+            "memory": MemoryGameSession,
+            "race": RaceGameSession,
+            "falling_words": FallingWordsGameSession,
+            "finding_words": FindingWordsGameSession,
+            # Add more games as needed
+        }
+
+        game_model = model_map.get(game)
+        if game_model:
+            game_sessions = game_model.objects.filter(user=user, timestamp__range=(start_date, end_date))
+
+    else:
+        # Sum all stats from all games
+        game_sessions = []
+        game_models = [MemoryGameSession, RaceGameSession, FallingWordsGameSession]
+        for model in game_models:
+            game_sessions.extend(model.objects.filter(user=user, timestamp__range=(start_date, end_date)))
+
+    all_days = [start_date + timedelta(days=i) for i in range((end_date - start_date).days + 1)]
+    all_days_str = [day.strftime("%d").lstrip('0') for day in all_days]
+
+    if game_sessions:
+        results = {day: 0 for day in all_days_str}
+        for session in game_sessions:
+            created_day = session.timestamp.date()
+            created_day_str = created_day.strftime("%d").lstrip('0')
+            results[created_day_str] += 1
+
+        return Response(data=results)
+    else:
+        return HttpResponseBadRequest("Invalid input")
 
 
 class FriendRequestViewSet(viewsets.ModelViewSet):
