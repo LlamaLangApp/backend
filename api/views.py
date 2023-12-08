@@ -187,6 +187,7 @@ def uploadAvatar(request):
 
     return Response(status=status.HTTP_200_OK)
 
+
 @api_view(['POST'])
 def get_scoreboard(request):
     body = json.loads(request.body)
@@ -204,13 +205,12 @@ def get_scoreboard(request):
         pass
     elif period == "this_week":
         start_of_the_week = calculate_current_week_start()
-        objects = objects.filter(timestamp__gte=start_of_the_week)
+        objects = objects.filter(date__gte=start_of_the_week)
     else:
         return HttpResponseBadRequest("Unknown period")
 
     agg = Sum("score_gained", default=0)
 
-    all_scores = None
     if scoreboard_type == "global":
         all_scores = (
             CustomUser.objects
@@ -231,9 +231,11 @@ def get_scoreboard(request):
         )
     elif scoreboard_type == "friends":
         friends = Friendship.objects.filter(user=request.user).values_list('friend', flat=True)
+        friends_and_user = list(friends) + [request.user.id]
+
         all_scores = (
             CustomUser.objects
-            .filter(pk__in=friends)
+            .filter(pk__in=friends_and_user)
             .annotate(
                 points=ExpressionWrapper(
                     Coalesce(Subquery(
@@ -264,10 +266,16 @@ def get_scoreboard(request):
     user_result = None
     if request.user.is_authenticated:
         user_result = next((score for score in ranked_scores if score["username"] == request.user.username), None)
+        if user_result is None and scoreboard_type == "friends":
+            user_score = ScoreHistory.objects.filter(user=request.user).aggregate(score=agg)["score"]
+            user_place = len(ranked_scores) + 1 if previous_score["points"] and user_score < previous_score[
+                "points"] else current_place
+            user_result = {"place": user_place, "username": request.user.username, "points": user_score}
 
     top_100_places = [ranked_score for ranked_score in ranked_scores if ranked_score["place"] <= 100]
 
     return Response(data={"user": user_result, "top_100": top_100_places})
+
 
 @api_view(["POST"])
 @permission_classes((permissions.IsAuthenticated,))
@@ -299,7 +307,9 @@ def get_user_statistics(request):
     objects = objects.filter(user=user, timestamp__range=(start, end))
     objects = objects.extra({'created_day': "date(timestamp)"})
     results = objects.values('created_day').annotate(count=models.Count('id'))
-
+    # kalendarz, streak
+    # najczeciej grana gra
+    # najdluzszy streak
     return Response(data=list(results))
 
 
