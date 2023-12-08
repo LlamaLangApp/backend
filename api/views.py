@@ -264,6 +264,11 @@ def get_scoreboard(request):
     user_result = None
     if request.user.is_authenticated:
         user_result = next((score for score in ranked_scores if score["username"] == request.user.username), None)
+        if user_result is None and scoreboard_type == "friends":
+            user_score = ScoreHistory.objects.filter(user=request.user).aggregate(score=agg)["score"]
+            user_place = len(ranked_scores) + 1 if previous_score["points"] and user_score < previous_score[
+                "points"] else current_place
+            user_result = {"place": user_place, "username": request.user.username, "points": user_score}
 
     top_100_places = [ranked_score for ranked_score in ranked_scores if ranked_score["place"] <= 100]
 
