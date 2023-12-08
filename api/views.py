@@ -4,7 +4,7 @@ import json
 import uuid
 from django.core.files.storage import default_storage
 from django.db.models.functions import Coalesce
-from django.db import models
+from django.utils import timezone
 from django.http import HttpResponseBadRequest
 from rest_framework import viewsets, permissions
 from rest_framework.decorators import action, api_view, permission_classes, parser_classes
@@ -276,6 +276,13 @@ def get_scoreboard(request):
     return Response(data={"user": user_result, "top_100": top_100_places})
 
 
+game_sessions_model_map = {
+            "memory": MemoryGameSession,
+            "race": RaceGameSession,
+            "falling_words": FallingWordsGameSession,
+            "finding_words": FindingWordsGameSession,
+            # Add more games as needed
+        }
 
 @api_view(["POST"])
 @permission_classes((permissions.IsAuthenticated,))
@@ -295,16 +302,7 @@ def get_calendar_stats(request):
     game_sessions = None
 
     if game is not None:
-        # Filter by the specified game
-        model_map = {
-            "memory": MemoryGameSession,
-            "race": RaceGameSession,
-            "falling_words": FallingWordsGameSession,
-            "finding_words": FindingWordsGameSession,
-            # Add more games as needed
-        }
-
-        game_model = model_map.get(game)
+        game_model = game_sessions_model_map.get(game)
         if game_model:
             game_sessions = game_model.objects.filter(user=user, timestamp__range=(start_date, end_date))
 
@@ -326,6 +324,65 @@ def get_calendar_stats(request):
             results[created_day_str] += 1
 
         return Response(data=results)
+    else:
+        return HttpResponseBadRequest("Invalid input")
+
+
+@api_view(["POST"])
+@permission_classes((permissions.IsAuthenticated,))
+def get_longest_streak(request):
+    user = request.user
+    body = json.loads(request.body)
+    game = body.get("game")
+
+    # Set the date range to the last year
+    end_date = datetime.today()
+    start_date = end_date - timedelta(days=365)
+
+    game_sessions = None
+
+    if game is not None:
+        game_model = game_sessions_model_map.get(game)
+        if game_model:
+            game_sessions = game_model.objects.filter(user=user, timestamp__gt=start_date)
+
+    else:
+        game_sessions = []
+        game_models = game_sessions_model_map.values()
+        for model in game_models:
+            game_sessions.extend(model.objects.filter(user=user, timestamp__gt=start_date))
+
+    if game_sessions:
+        game_sessions = sorted(game_sessions, key=lambda session: session.timestamp)
+        current_streak = 0
+        longest_streak = 0
+        current_streak_start = None
+        longest_streak_start = None
+        previous_date = None
+
+        for session in game_sessions:
+            current_date = session.timestamp.date()
+            if previous_date is None or (current_date - previous_date).days == 1:
+                if current_streak == 0:
+                    current_streak_start = current_date
+                current_streak += 1
+            else:
+                current_streak = 1
+                current_streak_start = current_date
+
+            if current_streak > longest_streak:
+                longest_streak = current_streak
+                longest_streak_start = current_streak_start
+
+            previous_date = current_date
+
+        longest_streak_end = longest_streak_start + timedelta(days=longest_streak - 1)
+
+        return Response({
+            "longest_streak": longest_streak,
+            "start_date": longest_streak_start.strftime("%Y-%m-%d"),
+            "end_date": longest_streak_end.strftime("%Y-%m-%d")
+        })
     else:
         return HttpResponseBadRequest("Invalid input")
 

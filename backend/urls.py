@@ -38,6 +38,7 @@ urlpatterns = [
     path("", include(router.urls)),
     path("scoreboard/", views.get_scoreboard),
     path("calendar/", views.get_calendar_stats),
+    path("longest-streak/", views.get_longest_streak),
     path("admin/", admin.site.urls),
     path("avatar-upload/", views.uploadAvatar, name="avatar-upload"),
     path("auth/", include("djoser.urls")),
