@@ -200,12 +200,12 @@ def get_points_history_aggregate(agg):
 
 
 game_sessions_model_map = {
-            "memory": MemoryGameSession,
-            "race": RaceGameSession,
-            "falling_words": FallingWordsGameSession,
-            "finding_words": FindingWordsGameSession,
-            # Add more games as needed
-        }
+    "memory": MemoryGameSession,
+    "race": RaceGameSession,
+    "falling_words": FallingWordsGameSession,
+    "finding_words": FindingWordsGameSession,
+    # Add more games as needed
+}
 
 
 def get_game_sessions(user, game, start_date, end_date):
@@ -233,7 +233,7 @@ def get_scoreboard(request):
 
     if not period:
         return HttpResponseBadRequest(
-            f"Body must contain 'period'. Body received: {body}"
+            f"Body must contain 'period'. Body received: {body},"
         )
 
     objects = ScoreHistory.objects
@@ -244,7 +244,7 @@ def get_scoreboard(request):
         start_of_the_week = calculate_current_week_start()
         objects = objects.filter(date__gte=start_of_the_week)
     else:
-        return HttpResponseBadRequest("Unknown period")
+        return HttpResponseBadRequest("Unknown period type. Available periods: 'this_week', 'all_time'. ")
 
     agg = Sum("score_gained", default=0)
 
@@ -268,7 +268,7 @@ def get_scoreboard(request):
             .order_by("-points")
         )
     else:
-        return HttpResponseBadRequest("Unknown scoreboard type")
+        return HttpResponseBadRequest("Unknown scoreboard type. Available types: 'friends', 'global")
 
     ranked_scores = []
     current_place = 1
@@ -295,34 +295,36 @@ def get_scoreboard(request):
 @permission_classes((permissions.IsAuthenticated,))
 def get_calendar_stats(request):
     user = request.user
-    body = json.loads(request.body)
-    game, month, year = body.get("game"), body.get("month"), body.get("year")
+    body = json.loads(request.body) if request.body else {}
+    game, month, year = body.get("game", None), body.get("month", datetime.today().month), body.get("year",
+                                                                                                    datetime.today().year)
 
-    if month is None:
-        today = datetime.today()
-        month = today.month
-        year = today.year
+    if not all(isinstance(arg, int) for arg in [month, year]):
+        return HttpResponseBadRequest("Invalid data types in the request body. All values should be integers.")
 
     start_date = datetime(year, month, 1)
-    end_date = start_date.replace(day=1, month=start_date.month % 12 + 1, year=start_date.year + start_date.month // 12) - timedelta(days=1)
+
+    if start_date > datetime.now():
+        return HttpResponseBadRequest("Future dates are not allowed.")
+
+    end_date = start_date.replace(day=1, month=start_date.month % 12 + 1,
+                                  year=start_date.year + start_date.month // 12) - timedelta(days=1)
 
     game_sessions = get_game_sessions(user, game, start_date, end_date)
     if game_sessions == -1:
-        return HttpResponseBadRequest("Invalid game name. Valid game names are: " + ", ".join(game_sessions_model_map.keys()))
+        return HttpResponseBadRequest(
+            "Invalid game name. Valid game names are: " + ", ".join(game_sessions_model_map.keys()))
 
     all_days = [start_date + timedelta(days=i) for i in range((end_date - start_date).days + 1)]
     all_days_str = [day.strftime("%d").lstrip('0') for day in all_days]
 
-    if game_sessions:
-        results = {day: 0 for day in all_days_str}
-        for session in game_sessions:
-            created_day = session.timestamp.date()
-            created_day_str = created_day.strftime("%d").lstrip('0')
-            results[created_day_str] += 1
+    results = {day: 0 for day in all_days_str}
+    for session in game_sessions:
+        created_day = session.timestamp.date()
+        created_day_str = created_day.strftime("%d").lstrip('0')
+        results[created_day_str] += 1
 
-        return Response(data=results)
-    else:
-        return HttpResponseBadRequest("Invalid input")
+    return Response(data={"calendar": results, "month": month, "year": year})
 
 
 @api_view(["POST"])
@@ -481,4 +483,3 @@ class FriendshipViewSet(viewsets.ModelViewSet):
         serializer = FriendshipSerializer(friendships, many=True)
 
         return Response(serializer.data)
-
