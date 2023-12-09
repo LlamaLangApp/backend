@@ -36,7 +36,7 @@ router.register("friendship", views.FriendshipViewSet, basename="friendship")
 
 urlpatterns = [
     path("", include(router.urls)),
-    path("statistics/scoreboard/", views.get_scoreboard),
+    path("scoreboard/", views.get_scoreboard),
     path("statistics/calendar/", views.get_calendar_stats),
     path("statistics/longest-streak/", views.get_longest_streak),
     path("statistics/current-streak/", views.get_current_streak),
