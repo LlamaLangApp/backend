@@ -1,8 +1,6 @@
 from datetime import date, timedelta
 from django.utils import timezone
 
-from backend.settings import POINTS_TO_2_LEVEL
-
 
 def calculate_current_week_start():
     today = timezone.now().date()
@@ -11,5 +9,5 @@ def calculate_current_week_start():
 
 
 def get_score_goal_for_level(level):
-    return POINTS_TO_2_LEVEL * (2 ** level)
+    return 300 * (2 ** level)
 

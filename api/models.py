@@ -9,6 +9,9 @@ from api.helpers import get_score_goal_for_level
 from backend import settings
 
 
+UNLOCK_WORDSET_THRESHOLD = 1000
+
+
 class Translation(models.Model):
     english = models.CharField(max_length=64)
     polish = models.CharField(max_length=64)
@@ -41,43 +44,29 @@ class WordSet(models.Model):
         wordsets = WordSet.objects.filter(category=self.category, difficulty__lt=self.difficulty)
         return list(wordsets)
 
-    def get_accuracy_for_user(self, user):
-        # Query specific game session models
+    def get_total_points_for_user(self, user):
         memory_sessions = MemoryGameSession.objects.filter(user=user, wordset=self)
         falling_words_sessions = FallingWordsGameSession.objects.filter(user=user, wordset=self)
         race_sessions = RaceGameSession.objects.filter(user=user, wordset=self)
         finding_words_sessions = FindingWordsGameSession.objects.filter(user=user, wordset=self)
 
-        total_accuracy = 0.0
-        total_sessions = 0
+        total_points = 0
 
         for session in memory_sessions:
-            total_accuracy += session.accuracy
-            total_sessions += 1
-
+            total_points += session.score
         for session in falling_words_sessions:
-            total_accuracy += session.accuracy
-            total_sessions += 1
-
+            total_points += session.score
         for session in race_sessions:
-            total_accuracy += session.accuracy
-            total_sessions += 1
-
+            total_points += session.score
         for session in finding_words_sessions:
-            total_accuracy += session.accuracy
-            total_sessions += 1
+            total_points += session.score
 
-        if total_sessions > 0:
-            average_accuracy = total_accuracy / total_sessions
-            return average_accuracy
-        else:
-            return -1.0  # If the user has never played, return -1.0
+        return total_points
 
     def is_locked_for_user(self, user):
-        # check if accuracies for all easier wordsets are at least 0.8
         easier_wordsets = list(self.get_easier_wordsets_from_category())
         for wordset in easier_wordsets:
-            if wordset.get_accuracy_for_user(user) < 0.8:
+            if wordset.get_total_points_for_user(user) < UNLOCK_WORDSET_THRESHOLD:
                 return True
         return False
 
@@ -125,9 +114,6 @@ class BaseGameSession(models.Model):
     wordset = models.ForeignKey(WordSet, on_delete=models.DO_NOTHING, null=False)
     score = models.IntegerField(validators=[MinValueValidator(0)])
     duration = models.IntegerField(validators=[MinValueValidator(0)], default=0)  # in seconds
-    accuracy = models.FloatField(
-        validators=[MinValueValidator(0.0), MaxValueValidator(1.0)]
-    )
     timestamp = models.DateTimeField(auto_now_add=False)
     game_name = models.CharField(max_length=20, choices=GAME_CHOICES, default='memory')
 

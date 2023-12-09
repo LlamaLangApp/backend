@@ -73,20 +73,20 @@ class WordSetSummarySerializer(serializers.ModelSerializer):
 
 class WordSetSerializer(serializers.ModelSerializer):
     locked = serializers.SerializerMethodField()
-    accuracy = serializers.SerializerMethodField()  # if user never played the accuracy is -1.0
+    points = serializers.SerializerMethodField()
     depends_on = WordSetSummarySerializer(many=True, source='get_easier_wordsets_from_category')
 
     class Meta:
         model = WordSet
         fields = ('id', 'english', 'polish', 'category', 'difficulty', 'locked',
-                  'accuracy', 'depends_on'
+                  'points', 'depends_on'
                   )
 
-    def get_accuracy(self, obj):
+    def get_points(self, obj):
         request = self.context.get('request')
         user = request.user
 
-        return obj.get_accuracy_for_user(user)
+        return obj.get_total_points_for_user(user)
 
     def get_locked(self, obj):
         request = self.context.get('request')

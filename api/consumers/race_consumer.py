@@ -59,7 +59,6 @@ class RaceConsumer(WaitListConsumer):
             user=self.user,
             wordset=self.race_active_game.wordset,
             score=self.game_player.score,
-            accuracy=self.game_player.good_answers / self.race_active_game.round_count,
             duration=(datetime.now() - self.start_game_timestamp).total_seconds())
         race_game_session.opponents.set(self.race_active_game.players.exclude(user=self.user).values_list("user", flat=True))
         print(race_game_session)

@@ -62,7 +62,6 @@ class FindingWordsConsumer(WaitListConsumer):
             user=self.user,
             wordset=self.active_game.wordset,
             score=self.player.score,
-            accuracy=self.player.good_answers / self.active_game.round_count,
             duration=(datetime.now() - self.start_game_timestamp).total_seconds())
         game_session.opponents.set(self.active_game.players.exclude(user=self.user).values_list("user", flat=True))
         game_session.save()

@@ -36,9 +36,11 @@ router.register("friendship", views.FriendshipViewSet, basename="friendship")
 
 urlpatterns = [
     path("", include(router.urls)),
-    path("scoreboard/", views.get_scoreboard),
-    path("calendar/", views.get_calendar_stats),
-    path("longest-streak/", views.get_longest_streak),
+    path("statistics/scoreboard/", views.get_scoreboard),
+    path("statistics/calendar/", views.get_calendar_stats),
+    path("statistics/longest-streak/", views.get_longest_streak),
+    path("statistics/current-streak/", views.get_current_streak),
+    path("statistics/game-points/", views.get_game_points),
     path("admin/", admin.site.urls),
     path("avatar-upload/", views.uploadAvatar, name="avatar-upload"),
     path("auth/", include("djoser.urls")),

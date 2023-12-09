@@ -138,7 +138,6 @@ class BaseGameSessionViewSet(viewsets.ModelViewSet):
             "user": user,
             "wordset": wordset,
             "score": body["score"],
-            "accuracy": body["accuracy"],
             "duration": body["duration"],
             "timestamp": timestamp,
         }
@@ -209,19 +208,21 @@ game_sessions_model_map = {
 
 
 def get_game_sessions(user, game, start_date, end_date):
-    if game is not None:
+    if game in game_sessions_model_map.keys():
         game_model = game_sessions_model_map.get(game)
         if game_model:
-            return game_model.objects.filter(user=user, timestamp__range=(start_date, end_date))
+            return game_model.objects.filter(user=user, timestamp__range=(start_date, end_date)) if start_date else game_model.objects.filter(user=user)
         else:
             return -1
-    else:
+    elif game == "all_games":
         # Sum all stats from all games
         game_sessions = []
         game_models = game_sessions_model_map.values()
         for model in game_models:
-            game_sessions.extend(model.objects.filter(user=user, timestamp__range=(start_date, end_date)))
+            game_sessions.extend(model.objects.filter(user=user, timestamp__range=(start_date, end_date)) if start_date else model.objects.filter(user=user))
         return game_sessions
+    else:
+        return -1
 
 
 @api_view(['POST'])
@@ -295,7 +296,7 @@ def get_scoreboard(request):
 @permission_classes((permissions.IsAuthenticated,))
 def get_calendar_stats(request):
     user = request.user
-    body = json.loads(request.body) if request.body else {}
+    body = json.loads(request.body)
     game, month, year = body.get("game", None), body.get("month", datetime.today().month), body.get("year",
                                                                                                     datetime.today().year)
 
@@ -313,7 +314,7 @@ def get_calendar_stats(request):
     game_sessions = get_game_sessions(user, game, start_date, end_date)
     if game_sessions == -1:
         return HttpResponseBadRequest(
-            "Invalid game name. Valid game names are: " + ", ".join(game_sessions_model_map.keys()))
+            "Invalid game name. Valid game names are: " + ", ".join(game_sessions_model_map.keys()) + "or 'all_games'.")
 
     all_days = [start_date + timedelta(days=i) for i in range((end_date - start_date).days + 1)]
     all_days_str = [day.strftime("%d").lstrip('0') for day in all_days]
@@ -331,17 +332,16 @@ def get_calendar_stats(request):
 @permission_classes((permissions.IsAuthenticated,))
 def get_longest_streak(request):
     user = request.user
-    body = json.loads(request.body) if request.body else {}
+    body = json.loads(request.body)
     game = body.get("game", None)
 
     # Set the date range to the last year
     end_date = datetime.today()
-    start_date = end_date - timedelta(days=365)
 
-    game_sessions = get_game_sessions(user, game, start_date, end_date)
+    game_sessions = get_game_sessions(user, game, None, end_date)
     if game_sessions == -1:
         return HttpResponseBadRequest(
-            "Invalid game name. Valid game names are: " + ", ".join(game_sessions_model_map.keys()))
+            "Invalid game name. Valid game names are: " + ", ".join(game_sessions_model_map.keys()) + "or 'all_games'.")
 
     if game_sessions:
         game_sessions = sorted(game_sessions, key=lambda session: session.timestamp)
@@ -376,6 +376,63 @@ def get_longest_streak(request):
         })
     else:
         return HttpResponseBadRequest("Invalid input")
+
+
+@api_view(["POST"])
+@permission_classes((permissions.IsAuthenticated,))
+def get_current_streak(request):
+    user = request.user
+    body = json.loads(request.body)
+    game = body.get("game", None)
+
+    end_date = datetime.today()
+
+    game_sessions = get_game_sessions(user, game, None, end_date)
+    if game_sessions == -1:
+        return HttpResponseBadRequest(
+            "Invalid game name. Valid game names are: " + ", ".join(game_sessions_model_map.keys()))
+
+    if game_sessions:
+        game_sessions = sorted(game_sessions, key=lambda session: session.timestamp)
+        current_streak = 0
+
+        for i in range(len(game_sessions) - 1, 0, -1):
+            current_session = game_sessions[i]
+            previous_session = game_sessions[i - 1]
+
+            current_date = current_session.timestamp.date()
+            previous_date = previous_session.timestamp.date()
+
+            if (current_date - previous_date).days == 1:
+                current_streak += 1
+            else:
+                break
+
+        return Response({"current_streak": current_streak})
+    else:
+        return Response({"current_streak": 0})
+
+
+@api_view(["POST"])
+@permission_classes((permissions.IsAuthenticated,))
+def get_game_points(request):
+    user = request.user
+    body = json.loads(request.body)
+    game = body.get("game", None)
+
+    end_date = datetime.today()
+
+    game_sessions = get_game_sessions(user, game, None, end_date)
+    if game_sessions == -1:
+        return HttpResponseBadRequest(
+            "Invalid game name. Valid game names are: " + ", ".join(game_sessions_model_map.keys()) + "or 'all_games'.")
+
+    total_points = 0
+    if game_sessions:
+        for session in game_sessions:
+            total_points += session.score
+
+    return Response({"total_points": total_points})
 
 
 class FriendRequestViewSet(viewsets.ModelViewSet):
