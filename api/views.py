@@ -18,7 +18,7 @@ from api.serializers import (
     FriendshipSerializer, WordSetSerializer, WordSetWithTranslationSerializer
 )
 from api.models import CustomUser, Translation, WordSet, MemoryGameSession, FallingWordsGameSession, FriendRequest, \
-    Friendship, RaceGameSession, ScoreHistory, FindingWordsGameSession
+    Friendship, ScoreHistory, FindingWordsGameSession, RaceGameSession
 from rest_framework import status
 from rest_framework.parsers import FileUploadParser
 from rest_framework.response import Response
@@ -186,7 +186,46 @@ def uploadAvatar(request):
     return Response(status=status.HTTP_200_OK)
 
 
+def get_points_history_aggregate(agg):
+    return ExpressionWrapper(
+        Coalesce(Subquery(
+            ScoreHistory.objects
+            .filter(user=OuterRef('pk'))
+            .values('user')
+            .annotate(score=agg)
+            .values('score')
+        ), Value(0)),
+        output_field=IntegerField()
+    )
+
+
+game_sessions_model_map = {
+            "memory": MemoryGameSession,
+            "race": RaceGameSession,
+            "falling_words": FallingWordsGameSession,
+            "finding_words": FindingWordsGameSession,
+            # Add more games as needed
+        }
+
+
+def get_game_sessions(user, game, start_date, end_date):
+    if game is not None:
+        game_model = game_sessions_model_map.get(game)
+        if game_model:
+            return game_model.objects.filter(user=user, timestamp__range=(start_date, end_date))
+        else:
+            return -1
+    else:
+        # Sum all stats from all games
+        game_sessions = []
+        game_models = game_sessions_model_map.values()
+        for model in game_models:
+            game_sessions.extend(model.objects.filter(user=user, timestamp__range=(start_date, end_date)))
+        return game_sessions
+
+
 @api_view(['POST'])
+@permission_classes((permissions.IsAuthenticated,))
 def get_scoreboard(request):
     body = json.loads(request.body)
     period = body["period"]
@@ -213,18 +252,7 @@ def get_scoreboard(request):
     if scoreboard_type == "global":
         all_scores = (
             CustomUser.objects
-            .annotate(
-                points=ExpressionWrapper(
-                    Coalesce(Subquery(
-                        ScoreHistory.objects
-                        .filter(user=OuterRef('pk'))
-                        .values('user')
-                        .annotate(score=agg)
-                        .values('score')
-                    ), Value(0)),
-                    output_field=IntegerField()
-                )
-            )
+            .annotate(points=get_points_history_aggregate(agg))
             .values('username', 'points')
             .order_by("-points")
         )
@@ -235,18 +263,7 @@ def get_scoreboard(request):
         all_scores = (
             CustomUser.objects
             .filter(pk__in=friends_and_user)
-            .annotate(
-                points=ExpressionWrapper(
-                    Coalesce(Subquery(
-                        ScoreHistory.objects
-                        .filter(user=OuterRef('pk'))
-                        .values('user')
-                        .annotate(score=agg)
-                        .values('score')
-                    ), Value(0)),
-                    output_field=IntegerField()
-                )
-            )
+            .annotate(points=get_points_history_aggregate(agg))
             .values('username', 'points')
             .order_by("-points")
         )
@@ -262,27 +279,17 @@ def get_scoreboard(request):
         ranked_scores.append({"place": current_place, **score})
         previous_score = score
 
-    user_result = None
-    if request.user.is_authenticated:
-        user_result = next((score for score in ranked_scores if score["username"] == request.user.username), None)
-        if user_result is None and scoreboard_type == "friends":
-            user_score = ScoreHistory.objects.filter(user=request.user).aggregate(score=agg)["score"]
-            user_place = len(ranked_scores) + 1 if previous_score and user_score < previous_score[
-                "points"] else current_place
-            user_result = {"place": user_place, "username": request.user.username, "points": user_score}
+    user_result = next((score for score in ranked_scores if score["username"] == request.user.username), None)
+    if scoreboard_type == "friends":
+        user_score = ScoreHistory.objects.filter(user=request.user).aggregate(score=agg)["score"]
+        user_place = len(ranked_scores) + 1 if previous_score and user_score < previous_score[
+            "points"] else current_place
+        user_result = {"place": user_place, "username": request.user.username, "points": user_score}
 
     top_100_places = [ranked_score for ranked_score in ranked_scores if ranked_score["place"] <= 100]
 
     return Response(data={"user": user_result, "top_100": top_100_places})
 
-
-game_sessions_model_map = {
-            "memory": MemoryGameSession,
-            "race": RaceGameSession,
-            "falling_words": FallingWordsGameSession,
-            "finding_words": FindingWordsGameSession,
-            # Add more games as needed
-        }
 
 @api_view(["POST"])
 @permission_classes((permissions.IsAuthenticated,))
@@ -299,19 +306,9 @@ def get_calendar_stats(request):
     start_date = datetime(year, month, 1)
     end_date = start_date.replace(day=1, month=start_date.month % 12 + 1, year=start_date.year + start_date.month // 12) - timedelta(days=1)
 
-    game_sessions = None
-
-    if game is not None:
-        game_model = game_sessions_model_map.get(game)
-        if game_model:
-            game_sessions = game_model.objects.filter(user=user, timestamp__range=(start_date, end_date))
-
-    else:
-        # Sum all stats from all games
-        game_sessions = []
-        game_models = [MemoryGameSession, RaceGameSession, FallingWordsGameSession]
-        for model in game_models:
-            game_sessions.extend(model.objects.filter(user=user, timestamp__range=(start_date, end_date)))
+    game_sessions = get_game_sessions(user, game, start_date, end_date)
+    if game_sessions == -1:
+        return HttpResponseBadRequest("Invalid game name. Valid game names are: " + ", ".join(game_sessions_model_map.keys()))
 
     all_days = [start_date + timedelta(days=i) for i in range((end_date - start_date).days + 1)]
     all_days_str = [day.strftime("%d").lstrip('0') for day in all_days]
@@ -339,18 +336,10 @@ def get_longest_streak(request):
     end_date = datetime.today()
     start_date = end_date - timedelta(days=365)
 
-    game_sessions = None
-
-    if game is not None:
-        game_model = game_sessions_model_map.get(game)
-        if game_model:
-            game_sessions = game_model.objects.filter(user=user, timestamp__gt=start_date)
-
-    else:
-        game_sessions = []
-        game_models = game_sessions_model_map.values()
-        for model in game_models:
-            game_sessions.extend(model.objects.filter(user=user, timestamp__gt=start_date))
+    game_sessions = get_game_sessions(user, game, start_date, end_date)
+    if game_sessions == -1:
+        return HttpResponseBadRequest(
+            "Invalid game name. Valid game names are: " + ", ".join(game_sessions_model_map.keys()))
 
     if game_sessions:
         game_sessions = sorted(game_sessions, key=lambda session: session.timestamp)
