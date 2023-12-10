@@ -59,10 +59,8 @@ class TranslationSerializer(serializers.ModelSerializer):
 
     def get_star(self, obj):
         request = self.context.get('request')
-
-        if request:
-            return obj.starred_by.filter(id=request.user.id).exists()
-        return False
+        print(obj)
+        return obj.get_starred_by_user(request.user)
 
 
 class WordSetSummarySerializer(serializers.ModelSerializer):

@@ -20,6 +20,10 @@ class Translation(models.Model):
     def __str__(self) -> str:
         return self.english
 
+    def get_starred_by_user(self, user):
+        self.refresh_from_db()
+        return self.starred_by.filter(id=user.id).exists()
+
 
 class WordSetCategory(models.TextChoices):
     FOOD = "food", "Food"
