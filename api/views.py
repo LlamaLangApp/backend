@@ -41,6 +41,8 @@ class TranslationViewSet(viewsets.ModelViewSet):
             translation.starred_by.add(user)
         translation.save()
 
+        translation.refresh_from_db()
+
         star = translation.starred_by.filter(id=user.id).exists()
 
         return Response({
