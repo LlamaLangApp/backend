@@ -396,9 +396,9 @@ def get_current_streak(request):
 
     if game_sessions:
         game_sessions = sorted(game_sessions, key=lambda session: session.timestamp)
-        current_streak = 0
+        current_streak = 1 if game_sessions[-1].timestamp.date() == datetime.today().date() else 0
 
-        for i in range(len(game_sessions) - 1, 0, -1):
+        for i in range(len(game_sessions) - 1, -1, -1):
             current_session = game_sessions[i]
             previous_session = game_sessions[i - 1]
 
