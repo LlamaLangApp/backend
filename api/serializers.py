@@ -2,10 +2,9 @@
 from django.db.models import Sum
 from rest_framework import serializers
 
-from api.exceptions import LockedWordSetException
 from api.helpers import calculate_current_week_start
 from api.models import Translation, WordSet, MemoryGameSession, FallingWordsGameSession, CustomUser, ScoreHistory, \
-    Friendship, FriendRequest, TranslationUserAccuracyCounter
+    Friendship, FriendRequest
 from djoser.serializers import UserCreateSerializer, UserSerializer
 
 
@@ -13,12 +12,6 @@ class CustomUserCreateSerializer(UserCreateSerializer):
     class Meta(UserCreateSerializer.Meta):
         model = CustomUser
         fields = ('id', 'username', 'email', 'password', 'avatar')
-
-
-class TranslationUserAccuracyCounterSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = TranslationUserAccuracyCounter
-        fields = ("translation", "user")
 
 
 class CustomUserSerializer(UserSerializer):
@@ -35,7 +28,9 @@ class MyProfileSerializer(serializers.ModelSerializer):
     class Meta:
         model = CustomUser
         read_only_fields = ('level', 'current_week_points', 'score')
-        fields = ('id', 'username', 'email', 'score', 'level', 'llama', 'avatar', 'current_week_points', 'points_to_next_level')
+        fields = (
+            'id', 'username', 'email', 'score', 'level', 'llama', 'avatar', 'current_week_points',
+            'points_to_next_level')
 
     def get_current_week_points(self, obj):
         request = self.context.get('request')
@@ -64,18 +59,32 @@ class TranslationSerializer(serializers.ModelSerializer):
 
     def get_star(self, obj):
         request = self.context.get('request')
+        print(obj)
+        return obj.get_starred_by_user(request.user)
 
-        if request:
-            return obj.starred_by.filter(id=request.user.id).exists()
-        return False
+
+class WordSetSummarySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = WordSet
+        fields = ('id', 'english', 'polish', 'category', 'difficulty')
 
 
 class WordSetSerializer(serializers.ModelSerializer):
     locked = serializers.SerializerMethodField()
+    points = serializers.SerializerMethodField()
+    depends_on = WordSetSummarySerializer(many=True, source='get_easier_wordsets_from_category')
 
     class Meta:
         model = WordSet
-        fields = ('id', 'english', 'polish', 'category', 'difficulty', 'locked')
+        fields = ('id', 'english', 'polish', 'category', 'difficulty', 'locked',
+                  'points', 'depends_on'
+                  )
+
+    def get_points(self, obj):
+        request = self.context.get('request')
+        user = request.user
+
+        return obj.get_total_points_for_user(user)
 
     def get_locked(self, obj):
         request = self.context.get('request')

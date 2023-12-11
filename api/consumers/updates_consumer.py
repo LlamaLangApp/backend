@@ -5,6 +5,7 @@ from asgiref.sync import async_to_sync
 from django.contrib.auth.models import AbstractUser
 from channels.layers import get_channel_layer
 
+
 class UpdatesConsumer(AsyncWebsocketConsumer):
     async def connect(self):
         if self.scope["user"].is_authenticated:
@@ -18,13 +19,14 @@ class UpdatesConsumer(AsyncWebsocketConsumer):
 
     def group_name(self):
         return group_name_for_user(self.scope["user"])
-    
+
     async def update(self, event):
         await self.send(event["payload"])
-    
+
 
 def group_name_for_user(user: AbstractUser):
     return str(user.pk)
+
 
 async def _send_update_async(user: AbstractUser, payload: any):
     """Payload must be a dataclass"""
@@ -36,9 +38,11 @@ async def _send_update_async(user: AbstractUser, payload: any):
         {"type": "update", "payload": payload_str},
     )
 
+
 @dataclass
 class FriendStatusUpdate:
     type: str = "friend_status_update"
+
 
 def send_update(user: AbstractUser, payload: any):
     async_to_sync(_send_update_async)(user, payload)

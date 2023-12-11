@@ -23,7 +23,6 @@ from api import views
 
 
 router = routers.DefaultRouter()
-router.register("translation/answers", views.TranslationUserAccuracyCounterViewSet, basename="translation-answers")
 router.register("translation", views.TranslationViewSet, basename="translation")
 router.register("wordset", views.WordSetReadOnlySet, basename="wordset")
 router.register("memory-game", views.MemoryGameSessionViewSet, basename="memory-game")
@@ -38,7 +37,10 @@ router.register("friendship", views.FriendshipViewSet, basename="friendship")
 urlpatterns = [
     path("", include(router.urls)),
     path("scoreboard/", views.get_scoreboard),
-    path("user-statistics/", views.get_user_statistics),
+    path("statistics/calendar/", views.get_calendar_stats),
+    path("statistics/longest-streak/", views.get_longest_streak),
+    path("statistics/current-streak/", views.get_current_streak),
+    path("statistics/game-points/", views.get_game_points),
     path("admin/", admin.site.urls),
     path("avatar-upload/", views.uploadAvatar, name="avatar-upload"),
     path("auth/", include("djoser.urls")),
