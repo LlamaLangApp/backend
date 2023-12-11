@@ -98,7 +98,7 @@ class WordSetWithTranslationSerializer(WordSetSerializer):
 
     class Meta:
         model = WordSet
-        fields = WordSetSerializer.Meta.fields + ('words',)
+        fields = ('words',)
 
 
 class MemoryGameSessionSerializer(serializers.ModelSerializer):
