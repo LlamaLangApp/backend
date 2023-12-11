@@ -113,7 +113,7 @@ class WordSetReadOnlySet(viewsets.ReadOnlyModelViewSet):
         if limit:
             serialized_data['words'] = serialized_data['words'][:int(limit)]
 
-        return Response(serialized_data)
+        return Response(serialized_data.get('words'))
 
 
 class BaseGameSessionViewSet(viewsets.ModelViewSet):
