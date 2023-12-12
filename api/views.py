@@ -329,7 +329,6 @@ def get_longest_streak(request):
     body = json.loads(request.body)
     game = body.get("game", None)
 
-    # Set the date range to the last year
     end_date = datetime.today()
 
     game_sessions = get_game_sessions(user, game, None, end_date)
@@ -405,6 +404,34 @@ def get_current_streak(request):
         return Response({"current_streak": current_streak})
     else:
         return Response({"current_streak": 0})
+
+
+@api_view(["POST"])
+@permission_classes((permissions.IsAuthenticated,))
+def get_total_days(request):
+    user = request.user
+
+    end_date = datetime.today()
+
+    game_sessions = get_game_sessions(user, "all_games", None, end_date)
+    if game_sessions == -1:
+        return HttpResponseBadRequest(
+            "Invalid game name. Valid game names are: " + ", ".join(
+                GAME_NAMES_MODELS_MAPPING.keys()) + "or 'all_games'.")
+
+    if game_sessions:
+        game_sessions = sorted(game_sessions, key=lambda session: session.timestamp)
+
+        session_count_per_day = {}
+        for session in game_sessions:
+            day = session.timestamp.date()
+            session_count_per_day[day] = session_count_per_day.get(day, 0) + 1
+
+        days_with_at_least_one_session = sum(count >= 1 for count in session_count_per_day.values())
+
+        return Response({"total_days": days_with_at_least_one_session})
+
+    return Response({"total_days": 0})
 
 
 @api_view(["POST"])
