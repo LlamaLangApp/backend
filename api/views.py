@@ -406,7 +406,7 @@ def get_current_streak(request):
         return Response({"current_streak": 0})
 
 
-@api_view(["POST"])
+@api_view(["GET"])
 @permission_classes((permissions.IsAuthenticated,))
 def get_total_days(request):
     user = request.user
