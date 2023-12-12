@@ -5,7 +5,7 @@ from channels.db import database_sync_to_async
 from channels.generic.websocket import AsyncWebsocketConsumer
 from api.consumers.helpers import SocketGameState
 from api.consumers.messages import GameStartingMessage, JoinedWaitroomMessage, PlayerInvitationMessage, PlayerJoinedMessage, PlayerLeftMessage, StartGameMessage, WaitroomCanceledMessage, WaitroomMessageType, WaitroomRequestMessage
-from api.consumers.updates_consumer import WaitroomInvitation, send_update_async
+from api.consumers.updates_consumer import UpdatesConsumer, send_update_async
 from api.models import ActiveMultiplayerGame, CustomUser, WaitingRoom, WordSet
 from django.contrib.auth import get_user_model
 
@@ -60,6 +60,7 @@ class WaitListConsumer(AsyncWebsocketConsumer):
                 message = WaitroomRequestMessage.from_json(text_data)
                 await self.handle_waitroom_request(message)
             elif self.state == SocketGameState.IN_WAITROOM:
+                message = None
                 try:
                     message = PlayerInvitationMessage.from_json(text_data)
                 except:
@@ -78,11 +79,8 @@ class WaitListConsumer(AsyncWebsocketConsumer):
                 
                 if message.type == WaitroomMessageType.PLAYER_INVITATION:
                     await add_player_invitation(self.waitroom, message.user_id)
-                    await send_update_async(str(message.user_id), 
-                                            WaitroomInvitation(game=self.game_name(), 
-                                                               waitroom=self.waitroom.pk,
-                                                               username=self.user.username,
-                                                               wordset_id=self.waitroom.wordset.pk))
+                    await send_update_async(str(message.user_id),
+                                            UpdatesConsumer.trigger_sending_invitations)
                 elif message.type == WaitroomMessageType.START_GAME:
                     await self.run_in_background(self.check_if_game_should_start(True))
                 else:

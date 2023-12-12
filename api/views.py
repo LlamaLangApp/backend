@@ -1,22 +1,20 @@
 # views.py
 import json
-
 import uuid
 from django.core.files.storage import default_storage
 from django.db.models import Subquery, OuterRef
 from django.db.models.functions import Coalesce
-from rest_framework import generics
 from django.db import models
 from django.http import HttpResponseBadRequest
 from rest_framework import viewsets, permissions
 from rest_framework.decorators import action, api_view, permission_classes, parser_classes
 from rest_framework.exceptions import ValidationError
-from api.consumers.updates_consumer import FriendStatusUpdate, send_update
+from api.consumers.updates_consumer import UpdatesConsumer, send_update
 from api.helpers import calculate_current_week_start
-from django.db.models import OuterRef, Subquery, Sum, Value, IntegerField, F, ExpressionWrapper
+from django.db.models import OuterRef, Subquery, Sum, Value, IntegerField, ExpressionWrapper
 from api.serializers import (
     TranslationSerializer,
-    MemoryGameSessionSerializer, FallingWordsGameSessionSerializer, MyProfileSerializer, FriendRequestSerializer,
+    MemoryGameSessionSerializer, FallingWordsGameSessionSerializer, FriendRequestSerializer,
     FriendshipSerializer, TranslationUserAccuracyCounterSerializer, WordSetSerializer, WordSetWithTranslationSerializer
 )
 from api.models import CustomUser, Translation, WordSet, MemoryGameSession, FallingWordsGameSession, FriendRequest, \
@@ -24,7 +22,7 @@ from api.models import CustomUser, Translation, WordSet, MemoryGameSession, Fall
 from rest_framework import status
 from rest_framework.parsers import FileUploadParser
 from rest_framework.response import Response
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
 
 
 class TranslationViewSet(viewsets.ModelViewSet):
@@ -347,7 +345,7 @@ class FriendRequestViewSet(viewsets.ModelViewSet):
             raise ValidationError('You cannot send a friend request to yourself')
 
         serializer.save(sender=self.request.user)
-        send_update(receiver, FriendStatusUpdate())
+        send_update(receiver, UpdatesConsumer.trigger_friend_update)
 
     @action(detail=True, methods=['patch'])
     def accept(self, request, pk=None):
@@ -358,7 +356,7 @@ class FriendRequestViewSet(viewsets.ModelViewSet):
             friendship_one_side = Friendship.objects.create(user=friend_request.sender, friend=friend_request.receiver)
             Friendship.objects.create(user=friend_request.receiver, friend=friend_request.sender)
             friend_request.delete()
-            send_update(friend_request.sender, FriendStatusUpdate())
+            send_update(friend_request.sender, UpdatesConsumer.trigger_friend_update)
             return Response({'detail': 'Friend request accepted.', 'friendship_id': friendship_one_side.pk},
                             status=status.HTTP_200_OK)
         else:
@@ -372,7 +370,7 @@ class FriendRequestViewSet(viewsets.ModelViewSet):
 
         if friend_request.receiver == request.user:
             friend_request.delete()
-            send_update(friend_request.sender, FriendStatusUpdate())
+            send_update(friend_request.sender, UpdatesConsumer.trigger_friend_update)
             return Response({'detail': 'Friend request rejected.'}, status=status.HTTP_200_OK)
         else:
             return Response({'detail': 'You do not have permission to reject this request.'},
@@ -384,7 +382,7 @@ class FriendRequestViewSet(viewsets.ModelViewSet):
         # Check if the requester is the creator
         if friend_request.sender == request.user:
             friend_request.delete()
-            send_update(friend_request.receiver, FriendStatusUpdate())
+            send_update(friend_request.receiver, UpdatesConsumer.trigger_friend_update)
             return Response({'detail': 'Friend request deleted.'}, status=status.HTTP_204_NO_CONTENT)
         else:
             return Response({'detail': 'You do not have permission to delete this request.'},

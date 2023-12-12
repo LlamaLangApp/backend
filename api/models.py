@@ -6,6 +6,7 @@ from django.core.validators import MaxValueValidator, MinValueValidator
 from django.contrib.auth.models import AbstractUser
 from django.db.models import F, Avg
 from api.consumers.helpers import FindingWordsRound, get_finding_words_rounds, get_race_rounds, get_words_for_play
+from api.consumers.updates_consumer import send_waitroom_invitations_cancelation
 from api.helpers import get_score_goal_for_level
 from backend import settings
 
@@ -244,6 +245,10 @@ class WaitingRoom(models.Model):
             return cls.objects.get(game=game, wordset=wordset)
         except cls.DoesNotExist:
             return None
+        
+    def delete(self, *args, **kwargs):
+        send_waitroom_invitations_cancelation(self)
+        super().delete(*args, **kwargs)
 
 class GamePlayer(models.Model):
     score = models.IntegerField(default=0)
