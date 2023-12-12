@@ -11,3 +11,4 @@ def calculate_current_week_start():
 def get_score_goal_for_level(level):
     return 300 * (2 ** level)
 
+

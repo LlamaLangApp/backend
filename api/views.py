@@ -18,7 +18,7 @@ from api.serializers import (
     FriendshipSerializer, WordSetSerializer, WordSetWithTranslationSerializer
 )
 from api.models import CustomUser, Translation, WordSet, MemoryGameSession, FallingWordsGameSession, FriendRequest, \
-    Friendship, ScoreHistory, FindingWordsGameSession, RaceGameSession
+    Friendship, ScoreHistory, GAME_NAMES_MODELS_MAPPING
 from rest_framework import status
 from rest_framework.parsers import FileUploadParser
 from rest_framework.response import Response
@@ -200,18 +200,10 @@ def get_points_history_aggregate(agg):
     )
 
 
-game_sessions_model_map = {
-    "memory": MemoryGameSession,
-    "race": RaceGameSession,
-    "falling_words": FallingWordsGameSession,
-    "finding_words": FindingWordsGameSession,
-    # Add more games as needed
-}
-
 
 def get_game_sessions(user, game, start_date, end_date):
-    if game in game_sessions_model_map.keys():
-        game_model = game_sessions_model_map.get(game)
+    if game in GAME_NAMES_MODELS_MAPPING.keys():
+        game_model = GAME_NAMES_MODELS_MAPPING.get(game)
         if game_model:
             return game_model.objects.filter(user=user, timestamp__range=(start_date, end_date)) if start_date else game_model.objects.filter(user=user)
         else:
@@ -219,7 +211,7 @@ def get_game_sessions(user, game, start_date, end_date):
     elif game == "all_games":
         # Sum all stats from all games
         game_sessions = []
-        game_models = game_sessions_model_map.values()
+        game_models = GAME_NAMES_MODELS_MAPPING.values()
         for model in game_models:
             game_sessions.extend(model.objects.filter(user=user, timestamp__range=(start_date, end_date)) if start_date else model.objects.filter(user=user))
         return game_sessions
@@ -316,7 +308,7 @@ def get_calendar_stats(request):
     game_sessions = get_game_sessions(user, game, start_date, end_date)
     if game_sessions == -1:
         return HttpResponseBadRequest(
-            "Invalid game name. Valid game names are: " + ", ".join(game_sessions_model_map.keys()) + "or 'all_games'.")
+            "Invalid game name. Valid game names are: " + ", ".join(GAME_NAMES_MODELS_MAPPING.keys()) + "or 'all_games'.")
 
     all_days = [start_date + timedelta(days=i) for i in range((end_date - start_date).days + 1)]
     all_days_str = [day.strftime("%d").lstrip('0') for day in all_days]
@@ -343,7 +335,7 @@ def get_longest_streak(request):
     game_sessions = get_game_sessions(user, game, None, end_date)
     if game_sessions == -1:
         return HttpResponseBadRequest(
-            "Invalid game name. Valid game names are: " + ", ".join(game_sessions_model_map.keys()) + "or 'all_games'.")
+            "Invalid game name. Valid game names are: " + ", ".join(GAME_NAMES_MODELS_MAPPING.keys()) + "or 'all_games'.")
 
     if game_sessions:
         game_sessions = sorted(game_sessions, key=lambda session: session.timestamp)
@@ -392,7 +384,7 @@ def get_current_streak(request):
     game_sessions = get_game_sessions(user, game, None, end_date)
     if game_sessions == -1:
         return HttpResponseBadRequest(
-            "Invalid game name. Valid game names are: " + ", ".join(game_sessions_model_map.keys()))
+            "Invalid game name. Valid game names are: " + ", ".join(GAME_NAMES_MODELS_MAPPING.keys()))
 
     if game_sessions:
         game_sessions = sorted(game_sessions, key=lambda session: session.timestamp)
@@ -427,7 +419,7 @@ def get_game_points(request):
     game_sessions = get_game_sessions(user, game, None, end_date)
     if game_sessions == -1:
         return HttpResponseBadRequest(
-            "Invalid game name. Valid game names are: " + ", ".join(game_sessions_model_map.keys()) + "or 'all_games'.")
+            "Invalid game name. Valid game names are: " + ", ".join(GAME_NAMES_MODELS_MAPPING.keys()) + "or 'all_games'.")
 
     total_points = 0
     if game_sessions:
