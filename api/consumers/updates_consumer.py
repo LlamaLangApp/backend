@@ -42,6 +42,8 @@ class FriendStatusUpdate:
 
 @dataclass
 class WaitroomInvitation:
+    username: str
+    wordset_id: str
     game: str
     waitroom: str
     type: str = "waitroom_invitation"

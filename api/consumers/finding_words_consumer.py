@@ -2,7 +2,7 @@ import json
 from datetime import datetime, timezone
 from typing import List
 from channels.db import database_sync_to_async
-from api.consumers.helpers import FindingWordsRound, SocketGameState
+from api.consumers.helpers import FindingWordsRound, SocketGameState, get_points
 from api.consumers.messages import (
     FindingWordsRoundResultMessage,
     FindingWordsAnswerMessage,
@@ -92,6 +92,7 @@ class FindingWordsConsumer(WaitListConsumer):
         round: FindingWordsRound = rounds[self.active_game.round_count - 1]
 
         player_won = self.active_game.is_answer_valid_for_round(self.last_answer, self.active_game.round_count - 1)
+        points = 0
         if player_won:
             points = get_points(self.last_position)
 
@@ -102,12 +103,12 @@ class FindingWordsConsumer(WaitListConsumer):
 
         word = self.last_answer if player_won else round["answer"]
 
-        return FindingWordsRoundResultMessage(word, self.player.score).to_json()
+        return FindingWordsRoundResultMessage(word=word, user_answer=self.last_answer, points=points).to_json()
 
     @database_sync_to_async
     def create_game_results_message(self):
-        players_with_scores = self.active_game.players.values('user__username', 'score').order_by('-score')
-        game_result_message = GameFinalResultMessage.create_from_players(players_with_scores)
+        players_with_scores = self.active_game.players.values('user__username', 'score')
+        game_result_message = GameFinalResultMessage.create_from_players(list(players_with_scores))
         return game_result_message.to_json()
 
     @database_sync_to_async
@@ -139,9 +140,3 @@ class FindingWordsConsumer(WaitListConsumer):
             self.state = SocketGameState.ENDING_GAME
             message = await self.create_game_results_message()
             await self.send(message)
-
-def get_points(position: int):
-    POINTS_PER_POSITION = [25, 20, 15, 10, 5]
-    if position < len(POINTS_PER_POSITION):
-        return POINTS_PER_POSITION[position]
-    return POINTS_PER_POSITION[-1]

@@ -2,7 +2,7 @@ import asyncio
 import json
 from datetime import datetime, timezone
 from channels.db import database_sync_to_async
-from api.consumers.helpers import SocketGameState
+from api.consumers.helpers import SocketGameState, get_points
 from api.consumers.messages import (
     RaceRoundResultMessage,
     RaceAnswerMessage,
@@ -19,6 +19,7 @@ class RaceConsumer(WaitListConsumer):
         super().__init__(args, kwargs)
         self.player: GamePlayer = None
         self.last_answer = None
+        self.last_position = None
 
     # Virtual functions implementations
     @staticmethod
@@ -94,8 +95,9 @@ class RaceConsumer(WaitListConsumer):
         rounds = json.loads(self.active_game.rounds)
         round = rounds[self.active_game.round_count - 1]
 
+        points = 0
         if round["answer"] == self.last_answer:
-            points = 15
+            points = get_points(self.last_position)
 
             TranslationUserAccuracyCounter.increment_good_answer(user=self.user, translation_id=round["answer_id"])
 
@@ -105,36 +107,27 @@ class RaceConsumer(WaitListConsumer):
         TranslationUserAccuracyCounter.increment_bad_answer(user=self.user, translation_id=round["answer_id"])
         self.player.refresh_from_db()
 
-        return RaceRoundResultMessage(correct=round["answer"], points=self.player.score).to_json()
+        return RaceRoundResultMessage(correct=round["answer"], user_answer=self.last_answer, points=points).to_json()
 
     @database_sync_to_async
     def create_game_results_message(self):
-        players_with_scores = self.active_game.players.values('user__username', 'score').order_by('-score')
-        game_result_message = GameFinalResultMessage.create_from_players(players_with_scores)
+        players_with_scores = self.active_game.players.values('user__username', 'score')
+        game_result_message = GameFinalResultMessage.create_from_players(list(players_with_scores))
         return game_result_message.to_json()
 
     @database_sync_to_async
     def handle_answer(self, message: RaceAnswerMessage):
+        self.active_game.refresh_from_db()
+
         self.last_answer = message.answer
+        self.last_position = self.active_game.answers_in_current_round
 
         self.active_game.mark_player_answer()
-
-    async def event_end_round(self, event):
-        message = await self.create_result_message()
-        await self.send(message)
-        await asyncio.sleep(1)
-
-        message = await self.create_question_message()
-        if message:
-            await self.send(message)
-        else:
-            self.state = SocketGameState.ENDING_GAME
-            message = await self.create_game_results_message()
-            await self.send(message)
 
     async def end_round_event(self, event):
         message = await self.create_result_message()
         self.last_answer = None
+        self.last_position = None
         await self.send(message)
 
     async def new_round_event(self, event):

@@ -70,3 +70,9 @@ def get_finding_words_rounds(words: List[str], round_count: int) -> List[Finding
         rounds.append(FindingWordsRound(letters, word))
 
     return rounds
+
+def get_points(position: int):
+    POINTS_PER_POSITION = [25, 20, 15, 10, 5]
+    if position < len(POINTS_PER_POSITION):
+        return POINTS_PER_POSITION[position]
+    return POINTS_PER_POSITION[-1]

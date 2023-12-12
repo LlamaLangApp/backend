@@ -1,7 +1,7 @@
 import json
 from dataclasses import dataclass, asdict
 from enum import Enum
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, TypedDict
 
 @dataclass
 class WebSocketMessage:
@@ -65,32 +65,41 @@ class WaitroomCanceledMessage(WebSocketMessage):
 class GameStartingMessage(WebSocketMessage):
     type: str = WaitroomMessageType.GAME_STARTING
 
+class PlayerResult(TypedDict):
+    user__username: str
+    score: int
+
+class PlayerResultDisplay(TypedDict):
+    username: str
+    score: int
+    place: int
+
 @dataclass
 class GameFinalResultMessage(WebSocketMessage):
-    winner: str
-    winner_points: int
-    scoreboard: List[Dict[str, str]]
+    scoreboard: List[PlayerResultDisplay]
     type: str = WaitroomMessageType.FINAL_RESULT
 
     @classmethod
-    def create_from_players(cls, players_with_scores):
-        tie = False
-        if players_with_scores:
-            highest_score_player = players_with_scores[0]
-            winner_username = highest_score_player['user__username']
-            winner_points = highest_score_player['score']
+    def create_from_players(cls, players_with_scores: List[PlayerResult]):
+        players_with_scores.sort(key=lambda r: r["score"], reverse=True)
 
-            if len(players_with_scores) > 0:
-                tie = winner_points == players_with_scores[1]['score']
+        place = 0
+        place_score = None
 
-        if tie:
-            winner_username = None
-            winner_points = None
+        scoreboard: List[PlayerResultDisplay] = []
 
-        scoreboard = [{'username': player['user__username'], 'points': player['score']} for player in
-                      players_with_scores]
+        for player_result in players_with_scores:
+            if player_result["score"] != place_score:
+                place += 1
+                place_score = player_result["score"]
+            
+            scoreboard.append({
+                "username": player_result["user__username"],
+                "score": player_result["score"],
+                "place": place
+            })
 
-        return cls(winner=winner_username, winner_points=winner_points, scoreboard=scoreboard)
+        return cls(scoreboard=scoreboard)
 
 
 
@@ -118,6 +127,7 @@ class RaceAnswerMessage(WebSocketMessage):
 @dataclass
 class RaceRoundResultMessage(WebSocketMessage):
     correct: str
+    user_answer: str
     points: int
     type: str = RaceMessageType.RESULT
 
@@ -145,6 +155,7 @@ class FindingWordsAnswerMessage(WebSocketMessage):
 @dataclass
 class FindingWordsRoundResultMessage(WebSocketMessage):
     word: str
+    user_answer: str
     points: int
     type: str = FindingWordsMessageType.RESULT
 

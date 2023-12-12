@@ -6,8 +6,8 @@ from channels.consumer import AsyncConsumer
 from channels.generic.websocket import AsyncWebsocketConsumer
 from api.consumers.helpers import SocketGameState
 from api.consumers.messages import GameStartingMessage, JoinedWaitroomMessage, PlayerInvitationMessage, PlayerJoinedMessage, PlayerLeftMessage, StartGameMessage, WaitroomCanceledMessage, WaitroomMessageType, WaitroomRequestMessage
-from api.consumers.updates_consumer import WaitroomInvitation, send_update, send_update_async
-from api.models import ActiveMultiplayerGame, CustomUser, FindingWordsActiveGame, MultiplayerGames, RaceActiveGame, WaitingRoom, WordSet
+from api.consumers.updates_consumer import WaitroomInvitation, send_update_async
+from api.models import ActiveMultiplayerGame, CustomUser, WaitingRoom, WordSet
 from django.contrib.auth import get_user_model
 
 User = get_user_model()
@@ -80,7 +80,9 @@ class WaitListConsumer(AsyncWebsocketConsumer):
                 if message.type == WaitroomMessageType.PLAYER_INVITATION:
                     await send_update_async(str(message.user_id), 
                                             WaitroomInvitation(game=self.game_name(), 
-                                                               waitroom=self.waitroom.pk))
+                                                               waitroom=self.waitroom.pk,
+                                                               username=self.user.username,
+                                                               wordset_id=self.waitroom.wordset.pk))
                 elif message.type == WaitroomMessageType.START_GAME:
                     await self.run_in_background(self.check_if_game_should_start(True))
                 else:
