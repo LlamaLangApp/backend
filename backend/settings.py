@@ -122,7 +122,7 @@ AUTH_USER_MODEL = "api.CustomUser"
 
 LANGUAGE_CODE = "en-us"
 
-TIME_ZONE = "CET"
+TIME_ZONE = "GMT"
 
 USE_I18N = True
 

@@ -386,22 +386,26 @@ def get_current_streak(request):
             "Invalid game name. Valid game names are: " + ", ".join(GAME_NAMES_MODELS_MAPPING.keys()))
 
     if game_sessions:
-        game_sessions = sorted(game_sessions, key=lambda session: session.timestamp)
-        current_streak = 0
-        previous_date = None
+        timestamps = [session.timestamp.date() for session in game_sessions]
+        timestamps = list(set(timestamps))
+        timestamps.sort(reverse=True)
 
-        for i in range(len(game_sessions) - 1, -1, -1):
-            current_date = game_sessions[i].timestamp.date()
+        if datetime.today().date() not in timestamps:
+            return Response({"current_streak": 0})
 
-            if (previous_date is None and current_date == datetime.today().date()) or (previous_date is not None and (current_date - previous_date).days == 1):
+        timestamps.pop(0)
+        current_streak = 1
+        prev_date = datetime.today().date()
+
+        for timestamp in timestamps:
+            if (prev_date - timestamp).days == 1:
                 current_streak += 1
-                previous_date = current_date
+                prev_date = timestamp
             else:
-                break
+                return Response({"current_streak": current_streak})
 
-        return Response({"current_streak": current_streak})
-    else:
         return Response({"current_streak": 0})
+
 
 
 @api_view(["GET"])
