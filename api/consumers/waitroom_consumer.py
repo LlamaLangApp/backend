@@ -2,7 +2,6 @@ import asyncio
 import json
 from typing import Optional, List
 from channels.db import database_sync_to_async
-from channels.consumer import AsyncConsumer
 from channels.generic.websocket import AsyncWebsocketConsumer
 from api.consumers.helpers import SocketGameState
 from api.consumers.messages import GameStartingMessage, JoinedWaitroomMessage, PlayerInvitationMessage, PlayerJoinedMessage, PlayerLeftMessage, StartGameMessage, WaitroomCanceledMessage, WaitroomMessageType, WaitroomRequestMessage
@@ -78,6 +77,7 @@ class WaitListConsumer(AsyncWebsocketConsumer):
                     return
                 
                 if message.type == WaitroomMessageType.PLAYER_INVITATION:
+                    await add_player_invitation(self.waitroom, message.user_id)
                     await send_update_async(str(message.user_id), 
                                             WaitroomInvitation(game=self.game_name(), 
                                                                waitroom=self.waitroom.pk,
@@ -318,3 +318,7 @@ def have_all_players_answered(game: ActiveMultiplayerGame) -> int:
 @database_sync_to_async
 def get_current_round(game: ActiveMultiplayerGame) -> int:
     return game.round_count
+
+@database_sync_to_async
+def add_player_invitation(room: WaitingRoom, user_id: str):
+    room.invited_players.add(CustomUser.objects.get(id=user_id))

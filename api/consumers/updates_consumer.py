@@ -1,16 +1,20 @@
 from dataclasses import asdict, dataclass
 import json
-from typing import Union
+from typing import List, Union
 from channels.generic.websocket import AsyncWebsocketConsumer
+from channels.db import database_sync_to_async
 from asgiref.sync import async_to_sync
 from django.contrib.auth.models import AbstractUser
 from channels.layers import get_channel_layer
+from api.models import WaitingRoom
 
 class UpdatesConsumer(AsyncWebsocketConsumer):
     async def connect(self):
         if self.scope["user"].is_authenticated:
             await self.channel_layer.group_add(self.group_name(), self.channel_name)
             await self.accept()
+            for message in await get_invites_for_a_user(self.scope["user"]):
+                await self.send(json.dumps(asdict(message)))
         else:
             await self.close()
 
@@ -35,6 +39,18 @@ async def send_update_async(user: Union[AbstractUser, str], payload: any):
         ("UpdatesConsumer" + user) if isinstance(user, str) else group_name_for_user(user),
         {"type": "update", "payload": payload_str},
     )
+
+@database_sync_to_async
+def get_invites_for_a_user(user: AbstractUser) -> List["WaitroomInvitation"]:
+    def waitingroom_to_invitation(room: WaitingRoom) -> WaitroomInvitation:
+        return WaitroomInvitation(username=room.owner.username,
+                                  wordset_id=room.wordset.pk,
+                                  game=room.game,
+                                  waitroom=room.pk)
+    
+    messages = map(waitingroom_to_invitation, user.invited_to.all())
+    user.invited_to.clear()
+    return list(messages)
 
 @dataclass
 class FriendStatusUpdate:

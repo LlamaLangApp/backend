@@ -235,6 +235,8 @@ class WaitingRoom(models.Model):
     users = models.ManyToManyField("CustomUser", related_name="in_waiting_room", blank=True)
     owner = models.ForeignKey("Customuser", null=True, related_name="owns_waiting_room", on_delete=models.CASCADE)
     timestamp = models.DateTimeField(auto_now_add=True)
+
+    invited_players = models.ManyToManyField("CustomUser", related_name="invited_to")
     
     @classmethod
     def get_waiting_room_by_game_and_wordset(cls, game, wordset):
