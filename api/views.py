@@ -404,7 +404,7 @@ def get_current_streak(request):
             else:
                 return Response({"current_streak": current_streak})
 
-        return Response({"current_streak": 0})
+        return Response({"current_streak": current_streak})
 
 
 
