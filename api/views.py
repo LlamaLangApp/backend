@@ -14,7 +14,7 @@ from django.db.models import OuterRef, Subquery, Sum, Value, IntegerField, Expre
 from api.serializers import (
     TranslationSerializer,
     MemoryGameSessionSerializer, FallingWordsGameSessionSerializer, FriendRequestSerializer,
-    FriendshipSerializer, TranslationUserAccuracyCounterSerializer, WordSetSerializer, WordSetWithTranslationSerializer
+    FriendshipSerializer, WordSetSerializer, WordSetWithTranslationSerializer
 )
 from api.models import CustomUser, Translation, WordSet, MemoryGameSession, FallingWordsGameSession, FriendRequest, \
     Friendship, ScoreHistory, FindingWordsGameSession, RaceGameSession
