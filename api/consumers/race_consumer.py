@@ -1,164 +1,132 @@
 import asyncio
 import json
-from dataclasses import asdict
-from datetime import datetime
-
+from datetime import datetime, timezone
 from channels.db import database_sync_to_async
-from django.core.exceptions import ObjectDoesNotExist
-
-from api.consumers.helpers import get_race_rounds, get_words_for_play, SocketGameState
+from api.consumers.helpers import SocketGameState, get_points
 from api.consumers.messages import (
     RaceRoundResultMessage,
     RaceAnswerMessage,
     RaceNewQuestionMessage,
-    GameStartingMessage,
     GameFinalResultMessage
 )
-from api.consumers.waitroom_consumer import WaitListConsumer
-from api.models import RaceActiveGame, GamePlayer, RaceGameSession
-
+from api.consumers.waitroom_consumer import DEFAULT_TIMEOUT, WaitListConsumer
+from api.models import RaceActiveGame, GamePlayer, RaceGameSession, WaitingRoom
 
 class RaceConsumer(WaitListConsumer):
     DEFAULT_ROUNDS_COUNT = 3
 
     def __init__(self, *args, **kwargs):
         super().__init__(args, kwargs)
-        self.start_game_timestamp = None
-        self.game_player = None
+        self.player: GamePlayer = None
         self.last_answer = None
-        self.race_active_game = None
+        self.last_position = None
 
     # Virtual functions implementations
     @staticmethod
-    async def on_game_init(players, wordset):
-        return (await RaceConsumer.create_race_active_game(players, wordset)).pk
-
-    async def on_start(self, session_id):
-        await self.init_race_active_game(session_id)
-        await self.send(await self.create_starting_message())
-        
-        await asyncio.sleep(1)
-        
-        self.start_game_timestamp = datetime.now()
-        await self.send(await self.create_question_message())
-
-    async def on_message(self, message):
-        message = RaceAnswerMessage(answer=message["answer"])
-
-        if await self.handle_answer(message):
-            await self.group_send("event_end_round", {})
-
-    async def on_disconnected(self):
-        await self.save_race_game_session()
-        await self.clear_race_active_game()
-
-    # Database functions
-    @database_sync_to_async
-    def save_race_game_session(self):
-        race_game_session = RaceGameSession.objects.create(
-            user=self.user,
-            wordset=self.race_active_game.wordset,
-            score=self.game_player.score,
-            duration=(datetime.now() - self.start_game_timestamp).total_seconds())
-        race_game_session.opponents.set(self.race_active_game.players.exclude(user=self.user).values_list("user", flat=True))
-        print(race_game_session)
-        race_game_session.save()
+    def game_name() -> str:
+        return "race"
 
     @staticmethod
     @database_sync_to_async
-    def create_race_active_game(players, wordset):
-        words = get_words_for_play(wordset)
-        race_rounds = get_race_rounds(words)
-        game_session = RaceActiveGame.objects.create(
-            rounds=json.dumps([asdict(r) for r in race_rounds]),
-            wordset=wordset,
-        )
-        game_session.players.set([GamePlayer.objects.create(user=player) for player in players])
-        game_session.save()
-        return game_session
+    def create_session_from_waiting_room(room: WaitingRoom) -> str:
+        if not room:
+            return False
+
+        session = RaceActiveGame.create_session_from_waiting_room(room)
+        room.delete()
+        return session.pk
 
     @database_sync_to_async
-    def init_race_active_game(self, session_id):
-        self.race_active_game = RaceActiveGame.objects.get(pk=session_id)
-        self.game_player = self.race_active_game.players.filter(user=self.user).first()
+    def load_active_game(self, session_id):
+        self.active_game = RaceActiveGame.objects.get(pk=session_id)
+        self.player = self.active_game.players.filter(user=self.user).first()
+
+    async def on_game_started(self):
+        await self.send(await self.create_question_message())
+
+    async def on_message(self, message):
+        try:
+            message = RaceAnswerMessage.from_json(message)
+        except RuntimeError:
+            await self.send_error("Bad message")
+            return
+
+        await self.handle_answer(message)
+        await self.check_if_round_ended()
+
+    # Database functions
+    @database_sync_to_async
+    def handle_disconnection(self):
+        race_game_session = RaceGameSession.objects.create(
+            user=self.user,
+            wordset=self.active_game.wordset,
+            score=self.player.score,
+            duration=(datetime.now(timezone.utc) - self.active_game.timestamp).total_seconds())
+        race_game_session.opponents.set(self.active_game.players.exclude(user=self.user).values_list("user", flat=True))
+        race_game_session.save()
+
+        self.active_game.required_answers -= 1
+        self.active_game.save()
+
+        if self.active_game.required_answers == 0:
+            self.active_game.delete()
 
     @database_sync_to_async
     def create_question_message(self):
-        rounds = json.loads(self.race_active_game.rounds)
-        if self.race_active_game.round_count < len(rounds):
-            round = rounds[self.race_active_game.round_count]
-            return RaceNewQuestionMessage(
-                question=round["question"], answers=round["options"]
-            ).to_json()
-        else:
+        rounds = json.loads(self.active_game.rounds)
+        if self.active_game.all_rounds_played():
             return None
-
-    @database_sync_to_async
-    def create_starting_message(self):
-        usernames = [player.user.username for player in self.race_active_game.players.all()]
-
-        return GameStartingMessage(players=usernames).to_json()
+        
+        round = rounds[self.active_game.round_count]
+        message = RaceNewQuestionMessage(
+            question=round["question"], answers=round["options"],
+            timeout=DEFAULT_TIMEOUT
+        )
+        return message.to_json()
 
     @database_sync_to_async
     def create_result_message(self):
-        self.race_active_game.refresh_from_db()
-        round = json.loads(self.race_active_game.rounds)[self.race_active_game.round_count - 1]
+        self.active_game.refresh_from_db()
+        rounds = json.loads(self.active_game.rounds)
+        round = rounds[self.active_game.round_count - 1]
 
+        points = 0
         if round["answer"] == self.last_answer:
-            points = 15
-            self.game_player.add_good_answer()
-            self.game_player.add_points(points)
+            points = get_points(self.last_position)
 
-        self.game_player.refresh_from_db()
+            self.player.add_good_answer()
+            self.player.add_points(points)
 
-        return RaceRoundResultMessage(correct=round["answer"], points=self.game_player.score).to_json()
+        self.player.refresh_from_db()
+
+        return RaceRoundResultMessage(correct=round["answer"], user_answer=self.last_answer, points=points).to_json()
 
     @database_sync_to_async
     def create_game_results_message(self):
-        players_with_scores = self.race_active_game.players.values('user__username', 'score').order_by('-score')
-        game_result_message = GameFinalResultMessage.create_from_players(players_with_scores)
+        players_with_scores = self.active_game.players.values('user__username', 'score')
+        game_result_message = GameFinalResultMessage.create_from_players(list(players_with_scores))
         return game_result_message.to_json()
 
     @database_sync_to_async
     def handle_answer(self, message: RaceAnswerMessage):
-        """Returns True if all players had answered already"""
+        self.active_game.refresh_from_db()
+
         self.last_answer = message.answer
+        self.last_position = self.active_game.answers_in_current_round
 
-        self.race_active_game.refresh_from_db()
-        self.race_active_game.add_answer()
-        self.race_active_game.refresh_from_db()
+        self.active_game.mark_player_answer()
 
-        if self.race_active_game.answers_count == len(self.race_active_game.players.all()):
-            self.race_active_game.reset_answers_count()
-            self.race_active_game.add_round()
-            return True
-
-        return False
-
-    @database_sync_to_async
-    def clear_race_active_game(self):
-        if self.race_active_game:
-            try:
-                self.race_active_game.refresh_from_db()
-                self.race_active_game.delete()
-            except ObjectDoesNotExist:
-                pass
-            finally:
-                self.race_active_game = None
-
-    async def event_end_round(self, event):
-        await self.send(await self.create_result_message())
-        await asyncio.sleep(1)
-
-        if self.race_active_game.round_count < self.DEFAULT_ROUNDS_COUNT:
-            await self.send_next_question()
-        else:
-            self.__state = SocketGameState.ENDING_GAME
-            await self.send_game_results()
-
-    async def send_next_question(self):
-        message = await self.create_question_message()
+    async def end_round_event(self, event):
+        message = await self.create_result_message()
+        self.last_answer = None
+        self.last_position = None
         await self.send(message)
 
-    async def send_game_results(self):
-        await self.send(await self.create_game_results_message())
+    async def new_round_event(self, event):
+        message = await self.create_question_message()
+        if message:
+            await self.send(message)
+        else:
+            self.state = SocketGameState.ENDING_GAME
+            message = await self.create_game_results_message()
+            await self.send(message)
