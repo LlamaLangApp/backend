@@ -3,7 +3,6 @@ import json
 import uuid
 from django.core.files.storage import default_storage
 from django.db.models.functions import Coalesce
-from django.db import models
 from django.http import HttpResponseBadRequest
 from rest_framework import viewsets, permissions
 from rest_framework.decorators import action, api_view, permission_classes, parser_classes
@@ -21,7 +20,7 @@ from api.models import CustomUser, Translation, WordSet, MemoryGameSession, Fall
 from rest_framework import status
 from rest_framework.parsers import FileUploadParser
 from rest_framework.response import Response
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 
 class TranslationViewSet(viewsets.ModelViewSet):

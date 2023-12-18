@@ -94,8 +94,8 @@ async def send_update_async(user: Union[AbstractUser, str], event_handler, **kwa
         {"type": event_handler.__name__.replace("_", "."), **kwargs},
     )
 
-def send_update(user: Union[AbstractUser, str], **kwargs):
-    async_to_sync(send_update_async)(user, **kwargs)
+def send_update(user: Union[AbstractUser, str], event_handler, **kwargs):
+    async_to_sync(send_update_async)(user, event_handler, **kwargs)
 
 async def send_waitroom_invitations_cancelation_async(waitroom: "WaitingRoom"):
     channel_layer = get_channel_layer()
