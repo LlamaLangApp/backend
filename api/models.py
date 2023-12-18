@@ -51,21 +51,11 @@ class WordSet(models.Model):
         return list(wordsets)
 
     def get_total_points_for_user(self, user):
-        memory_sessions = MemoryGameSession.objects.filter(user=user, wordset=self)
-        falling_words_sessions = FallingWordsGameSession.objects.filter(user=user, wordset=self)
-        race_sessions = RaceGameSession.objects.filter(user=user, wordset=self)
-        finding_words_sessions = FindingWordsGameSession.objects.filter(user=user, wordset=self)
-
         total_points = 0
-
-        for session in memory_sessions:
-            total_points += session.score
-        for session in falling_words_sessions:
-            total_points += session.score
-        for session in race_sessions:
-            total_points += session.score
-        for session in finding_words_sessions:
-            total_points += session.score
+        for game_name, session_model in GAME_NAMES_MODELS_MAPPING.items():
+            game_sessions = session_model.objects.filter(user=user, wordset=self)
+            for session in game_sessions:
+                total_points += session.score
 
         return total_points
 
@@ -167,6 +157,15 @@ class FindingWordsGameSession(BaseGameSession):
 
     def save(self, *args, **kwargs):
         super(FindingWordsGameSession, self).save(*args, **kwargs)
+
+
+GAME_NAMES_MODELS_MAPPING = {
+    "finding_words": FindingWordsGameSession,
+    "memory": MemoryGameSession,
+    "falling_words": FallingWordsGameSession,
+    "race": RaceGameSession,
+
+}
 
 
 class MultiplayerGames(models.TextChoices):
@@ -289,7 +288,8 @@ class FindingWordsActiveGame(ActiveMultiplayerGame):
 
 class FriendRequest(models.Model):
     sender = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='sent_friend_requests')
-    receiver = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='received_friend_requests')
+    receiver = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
+                                 related_name='received_friend_requests')
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

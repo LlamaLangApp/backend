@@ -17,7 +17,7 @@ from api.serializers import (
     FriendshipSerializer, WordSetSerializer, WordSetWithTranslationSerializer
 )
 from api.models import CustomUser, Translation, WordSet, MemoryGameSession, FallingWordsGameSession, FriendRequest, \
-    Friendship, ScoreHistory, FindingWordsGameSession, RaceGameSession
+    Friendship, ScoreHistory, GAME_NAMES_MODELS_MAPPING
 from rest_framework import status
 from rest_framework.parsers import FileUploadParser
 from rest_framework.response import Response
@@ -199,18 +199,10 @@ def get_points_history_aggregate(agg):
     )
 
 
-game_sessions_model_map = {
-    "memory": MemoryGameSession,
-    "race": RaceGameSession,
-    "falling_words": FallingWordsGameSession,
-    "finding_words": FindingWordsGameSession,
-    # Add more games as needed
-}
-
 
 def get_game_sessions(user, game, start_date, end_date):
-    if game in game_sessions_model_map.keys():
-        game_model = game_sessions_model_map.get(game)
+    if game in GAME_NAMES_MODELS_MAPPING.keys():
+        game_model = GAME_NAMES_MODELS_MAPPING.get(game)
         if game_model:
             return game_model.objects.filter(user=user, timestamp__range=(start_date, end_date)) if start_date else game_model.objects.filter(user=user)
         else:
@@ -218,7 +210,7 @@ def get_game_sessions(user, game, start_date, end_date):
     elif game == "all_games":
         # Sum all stats from all games
         game_sessions = []
-        game_models = game_sessions_model_map.values()
+        game_models = GAME_NAMES_MODELS_MAPPING.values()
         for model in game_models:
             game_sessions.extend(model.objects.filter(user=user, timestamp__range=(start_date, end_date)) if start_date else model.objects.filter(user=user))
         return game_sessions
@@ -315,7 +307,7 @@ def get_calendar_stats(request):
     game_sessions = get_game_sessions(user, game, start_date, end_date)
     if game_sessions == -1:
         return HttpResponseBadRequest(
-            "Invalid game name. Valid game names are: " + ", ".join(game_sessions_model_map.keys()) + "or 'all_games'.")
+            "Invalid game name. Valid game names are: " + ", ".join(GAME_NAMES_MODELS_MAPPING.keys()) + "or 'all_games'.")
 
     all_days = [start_date + timedelta(days=i) for i in range((end_date - start_date).days + 1)]
     all_days_str = [day.strftime("%d").lstrip('0') for day in all_days]
@@ -336,13 +328,12 @@ def get_longest_streak(request):
     body = json.loads(request.body)
     game = body.get("game", None)
 
-    # Set the date range to the last year
     end_date = datetime.today()
 
     game_sessions = get_game_sessions(user, game, None, end_date)
     if game_sessions == -1:
         return HttpResponseBadRequest(
-            "Invalid game name. Valid game names are: " + ", ".join(game_sessions_model_map.keys()) + "or 'all_games'.")
+            "Invalid game name. Valid game names are: " + ", ".join(GAME_NAMES_MODELS_MAPPING.keys()) + "or 'all_games'.")
 
     if game_sessions:
         game_sessions = sorted(game_sessions, key=lambda session: session.timestamp)
@@ -391,27 +382,57 @@ def get_current_streak(request):
     game_sessions = get_game_sessions(user, game, None, end_date)
     if game_sessions == -1:
         return HttpResponseBadRequest(
-            "Invalid game name. Valid game names are: " + ", ".join(game_sessions_model_map.keys()))
+            "Invalid game name. Valid game names are: " + ", ".join(GAME_NAMES_MODELS_MAPPING.keys()))
+
+    if game_sessions:
+        timestamps = [session.timestamp.date() for session in game_sessions]
+        timestamps = list(set(timestamps))
+        timestamps.sort(reverse=True)
+
+        if datetime.today().date() not in timestamps:
+            return Response({"current_streak": 0})
+
+        timestamps.pop(0)
+        current_streak = 1
+        prev_date = datetime.today().date()
+
+        for timestamp in timestamps:
+            if (prev_date - timestamp).days == 1:
+                current_streak += 1
+                prev_date = timestamp
+            else:
+                return Response({"current_streak": current_streak})
+
+        return Response({"current_streak": current_streak})
+
+
+
+@api_view(["GET"])
+@permission_classes((permissions.IsAuthenticated,))
+def get_total_days(request):
+    user = request.user
+
+    end_date = datetime.today()
+
+    game_sessions = get_game_sessions(user, "all_games", None, end_date)
+    if game_sessions == -1:
+        return HttpResponseBadRequest(
+            "Invalid game name. Valid game names are: " + ", ".join(
+                GAME_NAMES_MODELS_MAPPING.keys()) + "or 'all_games'.")
 
     if game_sessions:
         game_sessions = sorted(game_sessions, key=lambda session: session.timestamp)
-        current_streak = 1 if game_sessions[-1].timestamp.date() == datetime.today().date() else 0
 
-        for i in range(len(game_sessions) - 1, -1, -1):
-            current_session = game_sessions[i]
-            previous_session = game_sessions[i - 1]
+        session_count_per_day = {}
+        for session in game_sessions:
+            day = session.timestamp.date()
+            session_count_per_day[day] = session_count_per_day.get(day, 0) + 1
 
-            current_date = current_session.timestamp.date()
-            previous_date = previous_session.timestamp.date()
+        days_with_at_least_one_session = sum(count >= 1 for count in session_count_per_day.values())
 
-            if (current_date - previous_date).days == 1:
-                current_streak += 1
-            else:
-                break
+        return Response({"total_days": days_with_at_least_one_session})
 
-        return Response({"current_streak": current_streak})
-    else:
-        return Response({"current_streak": 0})
+    return Response({"total_days": 0})
 
 
 @api_view(["POST"])
@@ -426,7 +447,7 @@ def get_game_points(request):
     game_sessions = get_game_sessions(user, game, None, end_date)
     if game_sessions == -1:
         return HttpResponseBadRequest(
-            "Invalid game name. Valid game names are: " + ", ".join(game_sessions_model_map.keys()) + "or 'all_games'.")
+            "Invalid game name. Valid game names are: " + ", ".join(GAME_NAMES_MODELS_MAPPING.keys()) + "or 'all_games'.")
 
     total_points = 0
     if game_sessions:

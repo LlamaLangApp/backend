@@ -38,6 +38,7 @@ urlpatterns = [
     path("", include(router.urls)),
     path("scoreboard/", views.get_scoreboard),
     path("statistics/calendar/", views.get_calendar_stats),
+    path("statistics/total-days/", views.get_total_days),
     path("statistics/longest-streak/", views.get_longest_streak),
     path("statistics/current-streak/", views.get_current_streak),
     path("statistics/game-points/", views.get_game_points),
