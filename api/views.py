@@ -335,38 +335,41 @@ def get_longest_streak(request):
             "Invalid game name. Valid game names are: " + ", ".join(GAME_NAMES_MODELS_MAPPING.keys()) + "or 'all_games'.")
 
     if game_sessions:
-        game_sessions = sorted(game_sessions, key=lambda session: session.timestamp)
-        current_streak = 0
-        longest_streak = 0
-        current_streak_start = None
-        longest_streak_start = None
-        previous_date = None
+        timestamps = [session.timestamp.date() for session in game_sessions]
+        timestamps = list(set(timestamps))
+        timestamps.sort(reverse=True)
 
-        for session in game_sessions:
-            current_date = session.timestamp.date()
-            if previous_date is None or (current_date - previous_date).days == 1:
-                if current_streak == 0:
-                    current_streak_start = current_date
-                current_streak += 1
+        # Find the longest streak
+        longest_streak = []
+        current_streak = []
+
+        for i in range(len(timestamps) - 1):
+            if timestamps[i] - timestamps[i + 1] == timedelta(days=1):
+                current_streak.append(timestamps[i])
             else:
-                current_streak = 1
-                current_streak_start = current_date
+                current_streak.append(timestamps[i])
+                if len(current_streak) > len(longest_streak):
+                    longest_streak = current_streak.copy()
+                current_streak = []
 
-            if current_streak > longest_streak:
-                longest_streak = current_streak
-                longest_streak_start = current_streak_start
+        # Check for the last streak
+        current_streak.append(timestamps[-1])
+        if len(current_streak) > len(longest_streak):
+            longest_streak = current_streak
 
-            previous_date = current_date
+        start_date = longest_streak[-1]
+        end_date = longest_streak[0]
+        streak_length = len(longest_streak)
 
-        longest_streak_end = longest_streak_start + timedelta(days=longest_streak - 1)
+        result = {
+            "start_date": start_date,
+            "end_date": end_date,
+            "streak_length": streak_length
+        }
 
-        return Response({
-            "longest_streak": longest_streak,
-            "start_date": longest_streak_start.strftime("%Y-%m-%d"),
-            "end_date": longest_streak_end.strftime("%Y-%m-%d")
-        })
-    else:
-        return HttpResponseBadRequest("Invalid input")
+        return Response(result)
+
+    return HttpResponseBadRequest("No game sessions found.")
 
 
 @api_view(["POST"])
